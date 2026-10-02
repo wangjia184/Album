@@ -15,7 +15,10 @@ Run in two terminals:
 - **Terminal A (backend):** `cd album && cargo run` — listens on `0.0.0.0:3000` (override with `--port` / `--addr`)
 - **Terminal B (frontend):** `cd ui && npm run dev` — serves on port **5173**, proxies `/api` to the backend
 
-Backend CLI (clap): `album [--port <u16>] [--addr <ip>]` — defaults `0.0.0.0:3000`. Logs (tracing) go to stdout at `info` level. The old `PORT` env var is no longer read.
+Backend CLI (clap): `album [--port <u16>] [--addr <ip>] [--mount <HOST=PATH>]` — defaults `0.0.0.0:3000`. Logs (tracing) go to stdout at `info` level. The old `PORT` env var is no longer read.
+
+- `--mount HOST=PATH` — repeatable; hostname case-insensitive; `'*'` is default (quote it: `--mount '*=/path'`)
+- Example: `cargo run -- --mount 'dsm=/volume1/photo' --mount '*=/workspace/.www'`
 
 Swagger UI: `http://127.0.0.1:3000/swagger-ui/` (OpenAPI JSON at `/api-doc/openapi.json`).
 
