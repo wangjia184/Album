@@ -20,6 +20,10 @@ Run in two terminals:
 1. `cd ui && npm run build`
 2. `cd album && cargo build --release`
 
+## Prerequisite: build the frontend first
+
+`cd ui && npm run build` must run before `cargo test` / `cargo run` in `album/` — the tests and the embedded server assert against `ui/dist` (which is gitignored, so a fresh clone has no `ui/dist` until the ui build runs).
+
 ## Health check
 
 `http://127.0.0.1:3000/api/health`
