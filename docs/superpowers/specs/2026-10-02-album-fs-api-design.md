@@ -128,11 +128,13 @@ No 403 (avoid probing).
 MountTable (AppState) 
   → host param 
   → MountTable::get(host) 
-  → AlbumFs::new(root) 
-  → list_children | open_file 
+  → AlbumFs::new(root)          // sync, cheap
+  → spawn_blocking { list_children | open_file }
   → Json | file response
 ```
 
+- **Runtime:** `#[tokio::main]` (default `multi_thread`; may write `flavor = "multi_thread"` explicitly).
+- **Blocking FS:** `AlbumFs` methods stay **synchronous** (`std::fs`). Handlers are `async` and must run list/open (and any `canonicalize`/`stat` that can hit disk) inside `tokio::task::spawn_blocking` so they do not stall worker threads. Return values are plain data / `File` to send on the async side.
 - `MountTable` collected from CLI `Args.mount` in `main`, inserted into axum state.  
 - Routes registered inside `api::router()` (or nested module) so static SPA fallback and swagger paths are unaffected.  
 - OpenAPI: add `utoipa` path docs for list (and file as binary response) when convenient; not a blocker for behavior tests.
