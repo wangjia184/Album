@@ -19,6 +19,7 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "@masonry-grid/svelte": "^1.1.1",
     "@tailwindcss/vite": "^4.3.3",
     "daisyui": "^5.7.47",
     "svelte-spa-router": "^5.1.1",

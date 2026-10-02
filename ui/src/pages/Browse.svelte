@@ -2,7 +2,8 @@
   import { listDir, type ListResponse } from '../lib/api'
   import Breadcrumb from '../components/Breadcrumb.svelte'
   import FolderGrid from '../components/FolderGrid.svelte'
-  import MediaList from '../components/MediaList.svelte'
+  import Lightbox from '../components/Lightbox.svelte'
+  import MediaMasonry from '../components/MediaMasonry.svelte'
 
   let { params = {} }: { params?: Record<string, string | null> } = $props()
 
@@ -11,6 +12,7 @@
   let data = $state<ListResponse | null>(null)
   let loading = $state(true)
   let error = $state<string | null>(null)
+  let lightboxIndex = $state<number | null>(null)
 
   const dirs = $derived(
     data === null
@@ -31,11 +33,26 @@
     return wild.split('/').filter((segment) => segment.length > 0).join('/')
   }
 
+  function openLightbox(index: number): void {
+    lightboxIndex = index
+  }
+
+  function closeLightbox(): void {
+    lightboxIndex = null
+  }
+
+  function navigateLightbox(delta: number): void {
+    if (lightboxIndex === null) return
+    const next = lightboxIndex + delta
+    if (next >= 0 && next < media.length) lightboxIndex = next
+  }
+
   $effect(() => {
     let cancelled = false
     loading = true
     error = null
     data = null
+    lightboxIndex = null
     listDir(path).then(
       (res) => {
         if (cancelled) return
@@ -75,7 +92,17 @@
       </div>
     {/if}
     {#if media.length > 0}
-      <MediaList items={media} rel={path} />
+      <MediaMasonry items={media} rel={path} onselect={openLightbox} />
     {/if}
   {/if}
 </div>
+
+{#if lightboxIndex !== null}
+  <Lightbox
+    items={media}
+    index={lightboxIndex}
+    rel={path}
+    onclose={closeLightbox}
+    onnavigate={navigateLightbox}
+  />
+{/if}
