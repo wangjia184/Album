@@ -1,4 +1,5 @@
 use std::io;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use axum::body::Body;
@@ -33,17 +34,43 @@ fn map_io(err: io::Error) -> ApiError {
     }
 }
 
+/// Mount key from the `Host` header: strip `:port`, lowercase.
+/// Empty string when the header is missing/unusable.
+fn host_key(headers: &HeaderMap) -> String {
+    headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .map(|host| {
+            let host = host.split_once(':').map_or(host, |(h, _)| h);
+            host.to_ascii_lowercase()
+        })
+        .unwrap_or_default()
+}
+
+/// Resolve the mount root for this request's `Host` (exact match, then `*`).
+fn resolve_root(state: &AppState, headers: &HeaderMap) -> Result<PathBuf, ApiError> {
+    let key = host_key(headers);
+    if key.is_empty() {
+        return Err(not_found());
+    }
+    state.mounts.get(&key).cloned().ok_or_else(not_found)
+}
+
 /// Routes are relative to the `/api` nest; no fallback here (the nest's
 /// inner fallback handles unknown `/api/*` as JSON 404).
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/fs/{host}/list", get(list_root))
-        .route("/fs/{host}/list/{*path}", get(list_path))
-        .route("/fs/{host}/file/{*path}", get(file))
+        .route("/fs/list", get(list_root))
+        .route("/fs/list/{*path}", get(list_path))
+        .route("/fs/file/{*path}", get(file))
 }
 
-async fn list_impl(state: AppState, host: String, rel: String) -> Result<Json<Value>, ApiError> {
-    let root = state.mounts.get(&host).cloned().ok_or_else(not_found)?;
+async fn list_impl(
+    state: AppState,
+    headers: HeaderMap,
+    rel: String,
+) -> Result<Json<Value>, ApiError> {
+    let root = resolve_root(&state, &headers)?;
     let path_echo = rel.clone();
     let children = tokio::task::spawn_blocking(move || {
         let album = AlbumFs::new(&root)?;
@@ -57,24 +84,25 @@ async fn list_impl(state: AppState, host: String, rel: String) -> Result<Json<Va
 
 async fn list_root(
     State(state): State<AppState>,
-    Path(host): Path<String>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    list_impl(state, host, String::new()).await
+    list_impl(state, headers, String::new()).await
 }
 
 async fn list_path(
     State(state): State<AppState>,
-    Path((host, path)): Path<(String, String)>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, ApiError> {
-    list_impl(state, host, path).await
+    list_impl(state, headers, path).await
 }
 
 async fn file(
     State(state): State<AppState>,
-    Path((host, path)): Path<(String, String)>,
+    Path(path): Path<String>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let root = state.mounts.get(&host).cloned().ok_or_else(not_found)?;
+    let root = resolve_root(&state, &headers)?;
     let content_type = HeaderValue::from_str(
         mime_guess::from_path(&path)
             .first_or_octet_stream()

@@ -19,16 +19,24 @@ fn fixture() -> tempfile::TempDir {
 }
 
 fn app_with(tmp: &tempfile::TempDir) -> Router {
-    let mounts = MountTable::from_iter([("t".to_string(), tmp.path().to_path_buf())]);
+    let mounts = MountTable::from_iter([
+        ("localhost".to_string(), tmp.path().to_path_buf()),
+        ("*".to_string(), tmp.path().to_path_buf()),
+    ]);
     build_app(AppState { mounts })
 }
 
 async fn get(app: &Router, uri: &str) -> axum::response::Response {
+    get_host(app, uri, "localhost:3000").await
+}
+
+async fn get_host(app: &Router, uri: &str, host: &str) -> axum::response::Response {
     app.clone()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(uri)
+                .header(header::HOST, host)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -46,7 +54,7 @@ async fn list_root_ok_and_sorted() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/list").await;
+    let response = get(&app, "/api/fs/list").await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let json = body_json(response).await;
@@ -79,7 +87,7 @@ async fn list_nested_path_echoes_normalized_path() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/list/a_dir").await;
+    let response = get(&app, "/api/fs/list/a_dir").await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let json = body_json(response).await;
@@ -95,7 +103,7 @@ async fn list_dotdot_returns_404_json() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/list/../etc").await;
+    let response = get(&app, "/api/fs/list/../etc").await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let json = body_json(response).await;
@@ -103,11 +111,46 @@ async fn list_dotdot_returns_404_json() {
 }
 
 #[tokio::test]
-async fn list_unknown_host_404() {
+async fn host_header_strips_port_and_maps_mount() {
+    let tmp = fixture();
+    let mounts = MountTable::from_iter([("example.test".to_string(), tmp.path().to_path_buf())]);
+    let app = build_app(AppState { mounts });
+
+    let response = get_host(&app, "/api/fs/list", "example.test:3000").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert_eq!(json["path"], "");
+    assert!(json["children"].as_array().is_some_and(|c| !c.is_empty()));
+}
+
+#[tokio::test]
+async fn unknown_host_falls_back_to_star_or_404() {
+    let tmp = fixture();
+
+    // mounts only ("*", tmp): Host: nope.example → 200
+    let star_only = MountTable::from_iter([("*".to_string(), tmp.path().to_path_buf())]);
+    let app = build_app(AppState { mounts: star_only });
+    let response = get_host(&app, "/api/fs/list", "nope.example").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = body_json(response).await;
+    assert_eq!(json["path"], "");
+
+    // mounts empty: Host: nope → 404
+    let empty = MountTable::from_iter([]);
+    let app = build_app(AppState { mounts: empty });
+    let response = get_host(&app, "/api/fs/list", "nope").await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = body_json(response).await;
+    assert_eq!(json["error"], "not_found");
+}
+
+#[tokio::test]
+async fn legacy_host_path_segment_404() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/nope/list").await;
+    let response = get(&app, "/api/fs/t/list").await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let json = body_json(response).await;
@@ -119,7 +162,7 @@ async fn file_returns_raw_bytes_and_content_type() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/file/z_file.txt").await;
+    let response = get(&app, "/api/fs/file/z_file.txt").await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let content_type = response
@@ -143,7 +186,7 @@ async fn file_etag_then_304() {
     let tmp = fixture();
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/file/z_file.txt").await;
+    let response = get(&app, "/api/fs/file/z_file.txt").await;
     assert_eq!(response.status(), StatusCode::OK);
     let etag = response
         .headers()
@@ -164,7 +207,8 @@ async fn file_etag_then_304() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/fs/t/file/z_file.txt")
+                .uri("/api/fs/file/z_file.txt")
+                .header(header::HOST, "localhost:3000")
                 .header(header::IF_NONE_MATCH, &etag)
                 .body(Body::empty())
                 .unwrap(),
@@ -183,7 +227,7 @@ async fn file_symlink_escape_404() {
     std::os::unix::fs::symlink("/", tmp.path().join("escape_link")).expect("symlink");
     let app = app_with(&tmp);
 
-    let response = get(&app, "/api/fs/t/file/escape_link/etc/passwd").await;
+    let response = get(&app, "/api/fs/file/escape_link/etc/passwd").await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let json = body_json(response).await;
