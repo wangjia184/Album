@@ -68,8 +68,7 @@ mod tests {
 
     #[test]
     fn parse_mount_flag_repeated_lowercases_host() {
-        let args =
-            Args::try_parse_from(["album", "--mount", "DSM=/x", "--mount", "*=/y"]).unwrap();
+        let args = Args::try_parse_from(["album", "--mount", "DSM=/x", "--mount", "*=/y"]).unwrap();
         assert_eq!(
             args.mount,
             vec![
