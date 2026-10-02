@@ -1,4 +1,5 @@
 pub mod api;
+pub mod static_files;
 
 use axum::http::{header, HeaderValue, Method};
 use axum::Router;
@@ -13,5 +14,7 @@ pub fn build_app() -> Router {
         .allow_methods([Method::GET, Method::HEAD, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE, header::ACCEPT]);
 
-    api::router().layer(cors)
+    api::router()
+        .fallback(static_files::static_handler)
+        .layer(cors)
 }
