@@ -21,7 +21,7 @@ pub enum ChildKind {
 }
 
 /// One direct child of a listed directory.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ListedChild {
     pub name: String,
     pub kind: ChildKind,
