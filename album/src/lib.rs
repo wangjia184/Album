@@ -1,4 +1,5 @@
 pub mod api;
+pub mod mount;
 pub mod static_files;
 
 use axum::http::{header, HeaderValue, Method};
