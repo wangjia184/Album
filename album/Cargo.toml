@@ -11,6 +11,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rust-embed = { version = "8", features = ["mime-guess"] }
 percent-encoding = "2"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+utoipa = "6"
+utoipa-swagger-ui = { version = "10", features = ["axum"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

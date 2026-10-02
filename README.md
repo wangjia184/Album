@@ -12,8 +12,12 @@ Project purpose: a scaffold for an album browser app — a Svelte SPA frontend t
 
 Run in two terminals:
 
-- **Terminal A (backend):** `cd album && cargo run` — listens on port **3000**
+- **Terminal A (backend):** `cd album && cargo run` — listens on `0.0.0.0:3000` (override with `--port` / `--addr`)
 - **Terminal B (frontend):** `cd ui && npm run dev` — serves on port **5173**, proxies `/api` to the backend
+
+Backend CLI (clap): `album [--port <u16>] [--addr <ip>]` — defaults `0.0.0.0:3000`. Logs (tracing) go to stdout at `info` level. The old `PORT` env var is no longer read.
+
+Swagger UI: `http://127.0.0.1:3000/swagger-ui/` (OpenAPI JSON at `/api-doc/openapi.json`).
 
 ## Release build order
 

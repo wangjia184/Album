@@ -4,6 +4,8 @@ pub mod static_files;
 use axum::http::{header, HeaderValue, Method};
 use axum::Router;
 use tower_http::cors::CorsLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 pub fn build_app() -> Router {
     let cors = CorsLayer::new()
@@ -14,7 +16,11 @@ pub fn build_app() -> Router {
         .allow_methods([Method::GET, Method::HEAD, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE, header::ACCEPT]);
 
+    let swagger =
+        SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", api::ApiDoc::openapi());
+
     api::router()
+        .merge(swagger)
         .fallback(static_files::static_handler)
         .layer(cors)
 }
