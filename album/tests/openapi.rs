@@ -1,11 +1,11 @@
-use album::build_app;
+use album::{build_app, AppState};
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Request, StatusCode};
 use tower::ServiceExt;
 
 #[tokio::test]
 async fn swagger_ui_serves_html() {
-    let app = build_app();
+    let app = build_app(AppState::empty());
 
     let response = app
         .oneshot(
@@ -35,7 +35,7 @@ async fn swagger_ui_serves_html() {
 
 #[tokio::test]
 async fn openapi_spec_documents_health() {
-    let app = build_app();
+    let app = build_app(AppState::empty());
 
     let response = app
         .oneshot(

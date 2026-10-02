@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 const STAR: &str = "*";
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct MountTable {
     entries: Vec<(String, PathBuf)>,
 }

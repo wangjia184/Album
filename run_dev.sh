@@ -8,6 +8,10 @@ if [[ ! -d "$ROOT/ui/dist" ]]; then
   echo "warning: ui/dist missing — run (cd ui && npm run build) first if embed/tests need it" >&2
 fi
 
+if [[ ! -d "$ROOT/.www" ]]; then
+  echo "warning: .www missing — album mount '*=$ROOT/.www' will list nothing" >&2
+fi
+
 pids=()
 cleanup() {
   local code=$?
@@ -24,7 +28,7 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "==> album: cargo run (http://127.0.0.1:3000)"
-(cd "$ROOT/album" && cargo run) &
+(cd "$ROOT/album" && cargo run -- --mount "*=$ROOT/.www") &
 pids+=($!)
 
 echo "==> ui: npm run dev (http://127.0.0.1:5173, /api -> 3000)"

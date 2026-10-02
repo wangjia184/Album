@@ -39,13 +39,12 @@ async fn main() {
         }
     }
     let mounts: MountTable = args.mount.into_iter().collect();
-    let _ = mounts; // no consumer yet (plan: HTTP wiring deferred)
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("failed to bind listener");
     tracing::info!("listening on {addr}");
-    axum::serve(listener, album::build_app())
+    axum::serve(listener, album::build_app(album::AppState { mounts }))
         .await
         .expect("server error");
 }

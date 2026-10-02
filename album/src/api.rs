@@ -48,9 +48,10 @@ async fn api_not_found() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))
 }
 
-pub fn router() -> Router {
+pub fn router() -> Router<crate::AppState> {
     let api_routes = Router::new()
         .route("/health", get(health))
+        .merge(crate::fs_api::routes())
         .fallback(api_not_found);
 
     Router::new().nest("/api", api_routes)

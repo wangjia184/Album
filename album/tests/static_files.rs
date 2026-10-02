@@ -1,10 +1,10 @@
-use album::build_app;
+use album::{build_app, AppState};
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Request, StatusCode};
 use tower::ServiceExt;
 
 async fn get(uri: &str) -> (StatusCode, Option<String>, String) {
-    let app = build_app();
+    let app = build_app(AppState::empty());
     let response = app
         .oneshot(
             Request::builder()

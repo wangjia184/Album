@@ -34,3 +34,7 @@ Swagger UI: `http://127.0.0.1:3000/swagger-ui/` (OpenAPI JSON at `/api-doc/opena
 ## Health check
 
 `http://127.0.0.1:3000/api/health`
+
+## FS API
+
+- `GET /api/fs/{host}/list[/{*path}]` → JSON `{path, children:[{name,kind}]}` (dirs first); `GET /api/fs/{host}/file/{*path}` → raw bytes with `ETag` (`If-None-Match` → 304). Paths are confined to the mount root; unknown host or escape → 404 JSON.

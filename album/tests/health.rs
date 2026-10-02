@@ -1,4 +1,4 @@
-use album::build_app;
+use album::{build_app, AppState};
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Request, StatusCode};
 use tower::ServiceExt;
@@ -10,7 +10,7 @@ async fn body_json(response: axum::response::Response) -> serde_json::Value {
 
 #[tokio::test]
 async fn health_returns_200_with_ok_status() {
-    let app = build_app();
+    let app = build_app(AppState::empty());
 
     let response = app
         .oneshot(
@@ -36,7 +36,7 @@ async fn health_returns_200_with_ok_status() {
 
 #[tokio::test]
 async fn unknown_api_route_returns_json_404() {
-    let app = build_app();
+    let app = build_app(AppState::empty());
 
     let response = app
         .oneshot(
@@ -56,7 +56,7 @@ async fn unknown_api_route_returns_json_404() {
 
 #[tokio::test]
 async fn cors_allows_vite_dev_origin() {
-    let app = build_app();
+    let app = build_app(AppState::empty());
 
     let response = app
         .oneshot(
