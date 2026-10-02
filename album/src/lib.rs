@@ -1,4 +1,5 @@
 pub mod api;
+pub mod fs;
 pub mod mount;
 pub mod static_files;
 
