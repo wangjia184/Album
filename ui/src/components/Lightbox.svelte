@@ -67,6 +67,7 @@
 
       <div class="flex items-center justify-center">
         {#if item.kind === 'video'}
+          <!-- svelte-ignore a11y_media_has_caption -->
           <video
             src={url}
             controls
