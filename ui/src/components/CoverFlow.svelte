@@ -19,10 +19,10 @@
                         // side covers show art, they are not edge-on slivers;
                         // uniform width + fixed pitch = natural overlap)
   const STACK = 0.55 // depth-curve weight for tz only (lane x no longer uses it)
-  const GAP_C = 1.0  // center-adjacent lane pitch ×S — collision-free per
+  const GAP_C = 1.2  // center-adjacent lane pitch ×S — collision-free per
                      // point-in-both-quads oracle (live arc was 4 collisions);
                      // gives the center card ~200px more breathing room in motion
-  const GAP_W = 0.5 // wing lane pitch ×S — 190px parent overlap (visible cover after perspective)
+  const GAP_W = 0.5 // wing lane pitch ×S — 190px parent overlap (fine-grid collision-free, visibly covers after perspective)
   const PROX_MAX = 220 // px: resting center bulges toward the camera at d=0
                        // (perspective renders it ~16% larger); decays via
                        // cos²(πd/2) to 0 by |d|=1 — the first thing a leaving
