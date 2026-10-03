@@ -191,7 +191,8 @@ main:has([aria-modal='true']) {
   position: absolute;
   left: 50%;
   top: 50%;
-  will-change: transform;
+  /* NO will-change: promoting preserve-3d children to their own composited
+     layers breaks the shared 3D context — shows background holes mid-motion. */
   pointer-events: auto;
 }
 .cf-slot {
