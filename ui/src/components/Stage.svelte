@@ -1,5 +1,7 @@
 <script lang="ts">
   import { fileUrl } from '../lib/api'
+  import { splitMediaPath } from '../lib/pipeline'
+  import Breadcrumb from './Breadcrumb.svelte'
 
   let { current, onopen }: { current: string | null; onopen: (path: string) => void } = $props()
 
@@ -10,12 +12,15 @@
   type TransitionKind = FancyFx | 'fade'
 
   let shownSrc = $state<string | null>(null)
+  let shownPath = $state<string | null>(null)
   let shownDims = $state<{ w: number; h: number } | null>(null)
   let visible = $state(false)
   let failed = $state(false)
   let incoming = $state<{ src: string; fx: FancyFx } | null>(null)
   let lastTransition = $state<TransitionKind | ''>('')
   let seq = 0
+
+  const parentDir = $derived(shownPath === null ? '' : splitMediaPath(shownPath).dir)
 
   function arSame(a: { w: number; h: number }, b: { w: number; h: number }): boolean {
     const r1 = a.w / a.h
@@ -28,13 +33,15 @@
   }
 
   $effect(() => {
-    const url = current === null ? null : fileUrl('', current)
+    const path = current
+    const url = path === null ? null : fileUrl('', path)
     seq += 1
     const mySeq = seq
     failed = false
     incoming = null
     if (url === null) {
       shownSrc = null
+      shownPath = null
       shownDims = null
       visible = false
       lastTransition = ''
@@ -46,6 +53,7 @@
       const dims = { w: pre.naturalWidth, h: pre.naturalHeight }
       if (shownSrc === null || shownDims === null) {
         shownSrc = url
+        shownPath = path
         shownDims = dims
         visible = true
         return
@@ -58,6 +66,7 @@
         setTimeout(() => {
           if (mySeq !== seq) return
           shownSrc = url
+          shownPath = path
           shownDims = dims
           incoming = null
           visible = true
@@ -66,6 +75,7 @@
         // Interrupted mid fade-out: skip the out phase, fade the new photo in.
         lastTransition = 'fade'
         shownSrc = url
+        shownPath = path
         shownDims = dims
         visible = true
       } else {
@@ -74,6 +84,7 @@
         setTimeout(() => {
           if (mySeq !== seq) return
           shownSrc = url
+          shownPath = path
           shownDims = dims
           visible = true
         }, FADE_MS)
@@ -96,34 +107,41 @@
   {#if failed}
     <p class="text-sm opacity-50">图片加载失败</p>
   {:else if shownSrc !== null}
-    <button
-      type="button"
-      class="flex h-full w-full cursor-pointer items-center justify-center"
-      aria-label="打开这张照片"
-      onclick={openCurrent}
+    <div
+      class="bg-white p-3 transition-opacity duration-[800ms] ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+      data-transition={lastTransition}
+      style:opacity={visible ? '1' : '0'}
     >
-      <div
-        class="bg-white p-3 transition-opacity duration-[800ms] ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
-        data-transition={lastTransition}
-        style:opacity={visible ? '1' : '0'}
-      >
-        <div class="stage-fx-host relative">
+      <div class="stage-fx-host relative">
+        <img
+          data-testid="stage-img"
+          src={shownSrc}
+          alt=""
+          class="block max-h-[calc(100dvh-14rem)] max-w-[calc(100vw-6rem)] object-contain"
+        />
+        {#if incoming}
           <img
-            data-testid="stage-img"
-            src={shownSrc}
+            data-testid="stage-incoming"
+            src={incoming.src}
             alt=""
-            class="block max-h-[calc(100dvh-14rem)] max-w-[calc(100vw-6rem)] object-contain"
+            class="fx-{incoming.fx} absolute inset-0 h-full w-full"
           />
-          {#if incoming}
-            <img
-              data-testid="stage-incoming"
-              src={incoming.src}
-              alt=""
-              class="fx-{incoming.fx} absolute inset-0 h-full w-full"
-            />
-          {/if}
-        </div>
+        {/if}
+        <button
+          type="button"
+          class="absolute inset-0 cursor-pointer"
+          aria-label="打开这张照片"
+          onclick={openCurrent}
+        ></button>
+        {#if parentDir !== ''}
+          <div
+            class="badge badge-sm absolute bottom-2 left-2 z-20 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
+            data-testid="stage-parent"
+          >
+            <Breadcrumb path={parentDir} rootName="" />
+          </div>
+        {/if}
       </div>
-    </button>
+    </div>
   {/if}
 </div>
