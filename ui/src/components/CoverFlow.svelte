@@ -33,7 +33,7 @@
   // Playhead: the ONE animated state. Everything on screen is f(k - p).
   // Basic motion: ease p from n to n+1, rest, repeat. Drag/queue later.
   let p = $state(0)
-  const MOVE_MS = 700
+  const MOVE_MS = 950
   const PAUSE_MS = 1800
 
   function easeInOutCubic(t: number): number {
