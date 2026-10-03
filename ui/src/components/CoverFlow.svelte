@@ -26,6 +26,8 @@
   let status = $state<Status>('loading')
   let error = $state('')
   let items = $state<QueueItem[]>([])
+  // Paths whose <img> has fired load/error → eligible for the fade-in class.
+  let loaded = $state<string[]>([])
   // Stable mapping anchor: item index = k - anchorK + MID. Captured at fetch
   // time so images never swap mid-move (anchor only re-bases after a
   // completed move/click recenter, when geometry is at rest).
@@ -47,6 +49,10 @@
   function itemFor(k: number): QueueItem | null {
     const j = k - anchorK + MID
     return j >= 0 && j < items.length ? items[j] : null
+  }
+
+  function markLoaded(item: QueueItem): void {
+    if (!loaded.includes(item.path)) loaded = [...loaded, item.path]
   }
 
   function easeInOutCubic(t: number): number {
@@ -237,12 +243,15 @@
               class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
             >
               {#if item !== null}
-                <img
-                  src={fileUrl('', item.path)}
-                  alt=""
-                  class="block h-full w-full object-cover"
-                  data-testid="cover-img"
-                />
+              <img
+                src={fileUrl('', item.path)}
+                alt=""
+                class="cf-photo block h-full w-full object-cover"
+                class:is-loaded={loaded.includes(item.path)}
+                data-testid="cover-img"
+                onload={() => item !== null && markLoaded(item)}
+                onerror={() => item !== null && markLoaded(item)}
+              />
               {/if}
             </div>
             {#if parentSegs.length > 0}
