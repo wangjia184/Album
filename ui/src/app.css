@@ -173,3 +173,20 @@ main:has([aria-modal='true']) {
 .swiper .cover-slide {
   width: 640px !important;
 }
+
+/* Coverflow: vertically center fixed-height slides inside the adaptive root,
+   and maximize the ACTIVE photo via a scale that shrinks back on switch. */
+.swiper .swiper-wrapper {
+  align-items: center;
+}
+.cover-slide .cover-btn {
+  transform: scale(1);
+  transition: transform 300ms ease;
+  will-change: transform;
+}
+.cover-slide.swiper-slide-active .cover-btn {
+  transform: scale(var(--cover-scale, 1.35));
+}
+.cover-slide.swiper-slide-active {
+  z-index: 2;
+}

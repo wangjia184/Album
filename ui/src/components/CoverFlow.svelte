@@ -35,6 +35,29 @@
 
   const current = $derived(items[activeIdx] ?? null)
 
+  // Box geometry the adaptive scale is computed against (see CSS in app.css).
+  const BOX_H = 384
+
+  let ro: ResizeObserver | null = null
+
+  // Adaptive maximize: active photo scales up to fill the available root
+  // height (capped so it never clips through .swiper's overflow:hidden).
+  $effect(() => {
+    if (rootEl === null || cancelled) return
+    const el = rootEl
+    const apply = (): void => {
+      const s = Math.min(1.5, Math.max(1, (el.clientHeight - 8) / BOX_H))
+      el.style.setProperty('--cover-scale', String(Math.round(s * 100) / 100))
+    }
+    apply()
+    ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => {
+      ro?.disconnect()
+      ro = null
+    }
+  })
+
   function resetIdle(): void {
     if (cancelled) return
     clearTimeout(idleTimer)
@@ -203,6 +226,8 @@
       document.removeEventListener('click', onActivity)
       clearTimeout(idleTimer)
       clearTimeout(retryTimer)
+      ro?.disconnect()
+      ro = null
       swiper?.destroy(true, false)
       swiper = null
     }
@@ -222,7 +247,11 @@
       <span>照片列表加载失败：{error}</span>
     </div>
   {:else if status === 'ready'}
-    <div class="swiper w-full" bind:this={rootEl} data-testid="coverflow-swiper">
+    <div
+      class="swiper h-[min(600px,calc(100dvh-14rem))] w-full"
+      bind:this={rootEl}
+      data-testid="coverflow-swiper"
+    >
       <div class="swiper-wrapper">
         {#each items as item, i (i)}
           <!-- width pinned via `.swiper .cover-slide` !important rule in app.css:
@@ -231,7 +260,7 @@
           <div class="swiper-slide cover-slide" data-testid="cover-slide">
             <button
               type="button"
-              class="block h-96 w-full cursor-pointer"
+              class="cover-btn block h-96 w-full cursor-pointer"
               aria-label={item.path}
               onclick={() => onSlideClick(i)}
             >
