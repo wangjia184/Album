@@ -1,37 +1,36 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { fetchQueue, fileUrl } from '../lib/api'
-  import { thumbCapacity, windowSlots } from '../lib/pipeline'
+  import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
+  import { thumbCapacity } from '../lib/pipeline'
 
   let { oncurrent }: { oncurrent: (path: string) => void } = $props()
 
-  const TICK_MS = 5_000
+  const IDLE_MS = 5_000
   const PREFETCH_AHEAD = 16
   const MAX_EMPTY_RETRIES = 60
 
   let status = $state<'loading' | 'ready' | 'empty' | 'error'>('loading')
-  let history = $state<string[]>([])
-  let upcoming = $state<string[]>([])
-  let nextOffset = $state<number | null>(null)
+  let slots = $state<QueueItem[]>([])
+  let current = $state<QueueItem | null>(null)
+  let ringIndex = $state(0)
   let error = $state('')
   let width = $state(0)
 
   const capacity = $derived(thumbCapacity(width))
   const mid = $derived(Math.floor((capacity - 1) / 2))
-  const slots = $derived.by(() => windowSlots(history, upcoming, capacity))
 
   let cancelled = false
   let started = false
   let inFlight = false
-  let timer: ReturnType<typeof setInterval> | undefined
+  let lastCapacity = 0
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined
 
-  // Retain prefetch Image refs until settled so an unreferenced pending
-  // load can't be GC-abandoned before it warms the cache.
   const warmed = new Set<HTMLImageElement>()
 
-  function prefetch(): void {
-    for (const p of upcoming.slice(0, PREFETCH_AHEAD)) {
+  function prefetch(items: QueueItem[]): void {
+    for (const item of items.slice(0, PREFETCH_AHEAD)) {
       const im = new Image()
       warmed.add(im)
       const settle = (): void => {
@@ -39,29 +38,66 @@
       }
       im.onload = settle
       im.onerror = settle
-      im.src = fileUrl('', p)
+      im.src = fileUrl('', item.path)
     }
   }
 
-  async function advance(): Promise<void> {
-    if (cancelled || inFlight || nextOffset === null) return
+  function resetIdle(): void {
+    if (cancelled || status !== 'ready') return
+    clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      void autoAdvance()
+    }, IDLE_MS)
+  }
+
+  async function autoAdvance(): Promise<void> {
+    if (cancelled || inFlight || status !== 'ready' || current === null) return
     inFlight = true
     try {
-      const resp = await fetchQueue(nextOffset, capacity)
+      const resp = await fetchQueue(current.index + 1, capacity)
       if (cancelled) return
       if (resp.images.length > 0) {
-        const current = resp.images[0]
-        if (current !== undefined) {
-          history = [...history, current]
-          upcoming = resp.images.slice(1)
-          nextOffset = resp.nextOffset
-          oncurrent(current)
-          prefetch()
+        slots = resp.images
+        current = slots[mid] ?? slots[0] ?? null
+        ringIndex = mid
+        if (current !== null) {
+          oncurrent(current.path)
+          prefetch(slots.slice(mid + 1))
         }
       }
-      // Empty mid-cycle: keep state; the next tick retries the same nextOffset.
     } catch (err: unknown) {
-      console.warn('queue tick failed', err)
+      console.warn('queue advance failed', err)
+    } finally {
+      inFlight = false
+      if (!cancelled) resetIdle()
+    }
+  }
+
+  function select(i: number): void {
+    if (cancelled || status !== 'ready' || inFlight) return
+    const item = slots[i]
+    if (item === undefined) return
+    current = item
+    ringIndex = i
+    oncurrent(item.path)
+    prefetch(slots.slice(i + 1))
+    resetIdle()
+  }
+
+  async function refill(): Promise<void> {
+    if (cancelled || inFlight || status !== 'ready' || current === null) return
+    const target = current.index
+    inFlight = true
+    try {
+      const resp = await fetchQueue(target, capacity)
+      if (cancelled || resp.images.length === 0) return
+      slots = resp.images
+      const found = slots.findIndex((it) => it.index === target)
+      ringIndex = found >= 0 ? found : mid
+      current = slots[ringIndex] ?? current
+      prefetch(slots.slice(ringIndex + 1))
+    } catch (err: unknown) {
+      console.warn('queue refill failed', err)
     } finally {
       inFlight = false
     }
@@ -75,17 +111,16 @@
       try {
         const resp = await fetchQueue(offset0, capacity)
         if (cancelled) return
-        const first = resp.images[0]
-        if (first !== undefined) {
-          history = [first]
-          upcoming = resp.images.slice(1)
-          nextOffset = resp.nextOffset
+        if (resp.images.length > 0) {
+          slots = resp.images
+          current = slots[mid] ?? slots[0] ?? null
+          ringIndex = mid
           status = 'ready'
-          oncurrent(first)
-          prefetch()
-          timer = setInterval(() => {
-            void advance()
-          }, TICK_MS)
+          if (current !== null) {
+            oncurrent(current.path)
+            prefetch(slots.slice(mid + 1))
+          }
+          resetIdle()
           return
         }
         if (resp.done) {
@@ -118,11 +153,34 @@
     }
   })
 
+  // Refill centered on current when capacity changes (debounced 300ms).
+  $effect(() => {
+    const c = capacity
+    if (status !== 'ready' || current === null) {
+      lastCapacity = c
+      return
+    }
+    if (c === lastCapacity) return
+    lastCapacity = c
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      void refill()
+    }, 300)
+  })
+
   onMount(() => {
+    const onActivity = (): void => {
+      resetIdle()
+    }
+    document.addEventListener('mousemove', onActivity, { passive: true })
+    document.addEventListener('click', onActivity, { passive: true })
     return () => {
       cancelled = true
-      if (timer !== undefined) clearInterval(timer)
-      if (retryTimer !== undefined) clearTimeout(retryTimer)
+      document.removeEventListener('mousemove', onActivity)
+      document.removeEventListener('click', onActivity)
+      clearTimeout(idleTimer)
+      clearTimeout(retryTimer)
+      clearTimeout(resizeTimer)
     }
   })
 </script>
@@ -140,19 +198,19 @@
     <div class="alert alert-error py-2 text-sm" role="alert">
       <span>照片列表加载失败：{error}</span>
     </div>
-  {:else if status === 'ready' && capacity > 0}
-    {#each slots as p, i (i)}
-      {#if p !== null}
-        <div
-          class="h-16 w-28 shrink-0 overflow-hidden rounded-lg bg-base-300 {i === mid
-            ? 'ring-2 ring-primary'
-            : ''}"
-        >
-          <img src={fileUrl('', p)} alt="" class="h-full w-full object-cover" />
-        </div>
-      {:else}
-        <div class="h-16 w-28 shrink-0 rounded-lg bg-base-300/40"></div>
-      {/if}
+  {:else if status === 'ready'}
+    {#each slots as item, i (i)}
+      <button
+        type="button"
+        class="h-16 w-28 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-base-300 transition {i ===
+        ringIndex
+          ? 'ring-2 ring-primary'
+          : 'hover:ring-1 hover:ring-primary/60'}"
+        aria-label={item.path}
+        onclick={() => select(i)}
+      >
+        <img src={fileUrl('', item.path)} alt="" class="h-full w-full object-cover" />
+      </button>
     {/each}
   {/if}
 </div>

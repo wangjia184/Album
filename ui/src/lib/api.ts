@@ -82,21 +82,34 @@ export async function fetchDirThumbs(folderRel: string, n = 3): Promise<string[]
   return body.images.filter((image): image is string => typeof image === 'string')
 }
 
+export interface QueueItem {
+  index: number
+  path: string
+}
+
 export interface QueueResponse {
-  images: string[]
-  nextOffset: number
+  images: QueueItem[]
   done: boolean
 }
 
-export async function fetchQueue(offset: number, limit: number): Promise<QueueResponse> {
-  const url = `/api/fs/queue?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}`
-  const body = (await fetchJson(url)) as { images?: unknown; nextOffset?: unknown; done?: unknown }
+export async function fetchQueue(
+  offset: number,
+  limit: number,
+  center = true,
+): Promise<QueueResponse> {
+  const url = `/api/fs/queue?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}&center=${center}`
+  const body = (await fetchJson(url)) as { images?: unknown; done?: unknown }
   const images = Array.isArray(body.images)
-    ? body.images.filter((image): image is string => typeof image === 'string')
+    ? body.images.filter(
+        (item): item is QueueItem =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as QueueItem).index === 'number' &&
+          typeof (item as QueueItem).path === 'string',
+      )
     : []
-  const nextOffset = typeof body.nextOffset === 'number' ? body.nextOffset : 0
   const done = typeof body.done === 'boolean' ? body.done : false
-  return { images, nextOffset, done }
+  return { images, done }
 }
 
 export function fileUrl(rel: string, name: string): string {
