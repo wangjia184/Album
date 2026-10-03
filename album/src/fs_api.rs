@@ -14,6 +14,21 @@ use tokio_util::io::ReaderStream;
 use crate::fs::AlbumFs;
 use crate::AppState;
 
+const IMAGE_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"];
+
+fn is_image_path(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .map(|ext| IMAGE_EXTS.contains(&ext.as_str()))
+        .unwrap_or(false)
+}
+
+fn exif_string(exif: &exif::Exif, tag: exif::Tag) -> Option<String> {
+    exif.get_field(tag, exif::In::PRIMARY)
+        .map(|f| f.display_value().to_string())
+}
+
 type ApiError = (StatusCode, Json<Value>);
 
 fn not_found() -> ApiError {
@@ -63,6 +78,7 @@ pub fn routes() -> Router<AppState> {
         .route("/fs/list", get(list_root))
         .route("/fs/list/{*path}", get(list_path))
         .route("/fs/file/{*path}", get(file))
+        .route("/fs/meta/{*path}", get(meta))
 }
 
 async fn list_impl(
@@ -149,4 +165,77 @@ async fn file(
         .header(header::ETAG, &etag)
         .body(Body::from_stream(ReaderStream::new(tokio_file)))
         .map_err(|_| internal())
+}
+
+async fn meta(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let root = resolve_root(&state, &headers)?;
+    let meta_value = tokio::task::spawn_blocking(move || -> io::Result<serde_json::Value> {
+        let album = AlbumFs::new(&root)?;
+        let file_path = album.resolved_file_path(&path)?;
+        let md = std::fs::metadata(&file_path)?;
+
+        let name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let size = md.len();
+        let format = mime_guess::from_path(&file_path)
+            .first_or_octet_stream()
+            .to_string();
+        let modified = md
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| Value::from(d.as_secs()))
+            .unwrap_or(Value::Null);
+
+        let mut width = Value::Null;
+        let mut height = Value::Null;
+        let mut exif_obj = None;
+
+        if is_image_path(&path) {
+            if let Ok(dims) = image::image_dimensions(&file_path) {
+                width = Value::from(dims.0);
+                height = Value::from(dims.1);
+            }
+            let reader = std::fs::File::open(&file_path)?;
+            if let Ok(exif) =
+                exif::Reader::new().read_from_container(&mut std::io::BufReader::new(reader))
+            {
+                let f = |tag: exif::Tag| exif_string(&exif, tag);
+                let o = json!({
+                    "datetime": f(exif::Tag::DateTimeOriginal),
+                    "make": f(exif::Tag::Make),
+                    "model": f(exif::Tag::Model),
+                    "fNumber": f(exif::Tag::FNumber),
+                    "exposure": f(exif::Tag::ExposureTime),
+                    "iso": f(exif::Tag::PhotographicSensitivity),
+                    "focal": f(exif::Tag::FocalLength),
+                    "lens": f(exif::Tag::LensModel),
+                    "xResolution": f(exif::Tag::PixelXDimension),
+                });
+                exif_obj = Some(o);
+            }
+        }
+
+        Ok(json!({
+            "path": path,
+            "name": name,
+            "size": size,
+            "modified": modified,
+            "format": format,
+            "width": width,
+            "height": height,
+            "exif": exif_obj,
+        }))
+    })
+    .await
+    .map_err(|_| internal())?
+    .map_err(map_io)?;
+
+    Ok(Json(meta_value))
 }

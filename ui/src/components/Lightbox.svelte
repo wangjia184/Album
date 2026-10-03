@@ -187,7 +187,7 @@
       </div>
 
       {#if infoOpen}
-        <MediaInfoPanel />
+        <MediaInfoPanel {item} {rel} />
       {/if}
     </div>
   </div>

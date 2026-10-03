@@ -136,6 +136,16 @@ impl AlbumFs {
         }
         File::open(path)
     }
+
+    /// Resolve a confined regular file's absolute path (no open). Used for
+    /// metadata/exif reads that need the path itself.
+    pub fn resolved_file_path(&self, rel: &str) -> io::Result<PathBuf> {
+        let path = self.resolve(rel)?;
+        if !path.is_file() {
+            return Err(not_found("not a file"));
+        }
+        Ok(path)
+    }
 }
 
 #[cfg(test)]

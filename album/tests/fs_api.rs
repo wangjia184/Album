@@ -247,6 +247,68 @@ async fn file_symlink_escape_404() {
 }
 
 #[tokio::test]
+async fn meta_image_returns_dimensions_and_basic() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let png = image::RgbImage::from_pixel(4, 2, image::Rgb([10, 20, 30]));
+    png.save(tmp.path().join("pic.png")).expect("save png");
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/meta/pic.png").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert_eq!(json["name"], "pic.png");
+    assert_eq!(json["format"], "image/png");
+    assert_eq!(json["width"], 4);
+    assert_eq!(json["height"], 2);
+    assert!(json["size"].as_u64().unwrap_or(0) > 0);
+    assert!(json["modified"].is_number());
+    assert!(json["exif"].is_null() || json["exif"].is_object());
+}
+
+#[tokio::test]
+async fn meta_non_image_returns_basic_without_dimensions() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    std::fs::write(tmp.path().join("notes.txt"), "hello").expect("write");
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/meta/notes.txt").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert_eq!(json["name"], "notes.txt");
+    assert_eq!(json["format"], "text/plain");
+    assert_eq!(json["size"], 5);
+    assert!(json["width"].is_null());
+    assert!(json["height"].is_null());
+    assert!(json["exif"].is_null());
+}
+
+#[tokio::test]
+async fn meta_missing_404() {
+    let tmp = fixture();
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/meta/nope.jpg").await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = body_json(response).await;
+    assert_eq!(json["error"], "not_found");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn meta_symlink_escape_404() {
+    let tmp = fixture();
+    std::os::unix::fs::symlink("/", tmp.path().join("escape_link")).expect("symlink");
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/meta/escape_link/etc/passwd").await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let json = body_json(response).await;
+    assert_eq!(json["error"], "not_found");
+}
+
+#[tokio::test]
 async fn health_still_works_with_fs_routes() {
     let tmp = fixture();
     let app = app_with(&tmp);

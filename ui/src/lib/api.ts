@@ -11,6 +11,29 @@ export interface ListResponse {
   children: ListedChild[]
 }
 
+export interface MediaExif {
+  datetime?: string | null
+  make?: string | null
+  model?: string | null
+  fNumber?: string | null
+  exposure?: string | null
+  iso?: string | null
+  focal?: string | null
+  lens?: string | null
+  xResolution?: string | null
+}
+
+export interface MediaMeta {
+  path: string
+  name: string
+  size?: number | null
+  modified?: number | null
+  format?: string | null
+  width?: number | null
+  height?: number | null
+  exif?: MediaExif | null
+}
+
 function encodeSegments(rel: string): string {
   return rel
     .split('/')
@@ -19,9 +42,7 @@ function encodeSegments(rel: string): string {
     .join('/')
 }
 
-export async function listDir(rel: string): Promise<ListResponse> {
-  const encoded = encodeSegments(rel)
-  const url = encoded.length > 0 ? `/api/fs/list/${encoded}` : '/api/fs/list'
+async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url)
   if (!res.ok) {
     let detail = ''
@@ -36,7 +57,20 @@ export async function listDir(rel: string): Promise<ListResponse> {
     }
     throw new Error(`${res.status}${detail}`)
   }
-  return (await res.json()) as ListResponse
+  return res.json()
+}
+
+export async function listDir(rel: string): Promise<ListResponse> {
+  const encoded = encodeSegments(rel)
+  const url = encoded.length > 0 ? `/api/fs/list/${encoded}` : '/api/fs/list'
+  return (await fetchJson(url)) as ListResponse
+}
+
+export async function fetchMeta(rel: string, name: string): Promise<MediaMeta> {
+  const parts = [...rel.split('/').filter((s) => s.length > 0), name]
+    .map(encodeURIComponent)
+    .join('/')
+  return (await fetchJson(`/api/fs/meta/${parts}`)) as MediaMeta
 }
 
 export function fileUrl(rel: string, name: string): string {
