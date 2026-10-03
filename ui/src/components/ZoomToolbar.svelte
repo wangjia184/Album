@@ -46,7 +46,7 @@
     title="1:1 原始尺寸"
     onclick={ononeone}
   >
-    <Icon icon="ph:ruler" class="h-5 w-5" />
+    <Icon icon="ph:selection" class="h-5 w-5" />
   </button>
   <button
     type="button"
@@ -58,7 +58,6 @@
     <Icon icon="ph:frame-corners" class="h-5 w-5" />
   </button>
   {#if showRotate}
-    <span class="mx-1 h-5 w-px bg-base-300" aria-hidden="true"></span>
     <button
       type="button"
       class="btn btn-circle btn-sm btn-ghost"

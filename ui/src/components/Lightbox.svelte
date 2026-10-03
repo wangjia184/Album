@@ -108,7 +108,10 @@
   >
     <header class="flex shrink-0 items-center gap-1 border-b border-base-300 p-2">
       <span class="min-w-0 flex-1 truncate px-2 text-sm opacity-80">{item.name}</span>
-      <span class="tooltip {copied ? 'tooltip-open' : ''}" data-tip="Url Copied">
+      <span
+        class="tooltip tooltip-bottom {copied ? 'tooltip-open' : ''}"
+        data-tip="Url Copied"
+      >
         <button
           type="button"
           class="btn btn-circle btn-sm btn-ghost"
