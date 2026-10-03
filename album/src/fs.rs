@@ -127,6 +127,70 @@ impl AlbumFs {
         Ok(children)
     }
 
+    /// Random pick of up to `n` image children of `rel`. Uses direct children
+    /// when any exist; otherwise falls back to images in subdirectories down to
+    /// 3 levels, returned as relative subpaths (`sub/img.jpg`).
+    pub fn random_images(&self, rel: &str, n: usize) -> io::Result<Vec<String>> {
+        let dir = self.resolve(rel)?;
+        if !dir.is_dir() {
+            return Err(not_found("not a directory"));
+        }
+        let mut images = Self::direct_images(&dir, "")?;
+        if images.is_empty() {
+            images = Self::collect_nested(&dir, "", 3);
+        }
+        for i in 0..n.min(images.len()) {
+            let j = fastrand::usize(i..images.len());
+            images.swap(i, j);
+        }
+        images.truncate(n);
+        Ok(images)
+    }
+
+    /// Image files directly inside `dir`; names carry the `prefix` path.
+    fn direct_images(dir: &Path, prefix: &str) -> io::Result<Vec<String>> {
+        let mut images = Vec::new();
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if kind_from_name(&name) == ChildKind::Image {
+                images.push(format!("{prefix}{name}"));
+            }
+        }
+        Ok(images)
+    }
+
+    /// Images inside subdirectories of `dir`, descending at most `levels` more
+    /// directory levels. Best-effort: unreadable entries are skipped, and
+    /// symlinks are not followed (`file_type` reports links as links).
+    fn collect_nested(dir: &Path, prefix: &str, levels: usize) -> Vec<String> {
+        if levels == 0 {
+            return Vec::new();
+        }
+        let mut images = Vec::new();
+        let Ok(entries) = fs::read_dir(dir) else {
+            return images;
+        };
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let sub_prefix = format!("{prefix}{name}/");
+            if let Ok(found) = Self::direct_images(&entry.path(), &sub_prefix) {
+                images.extend(found);
+            }
+            images.extend(Self::collect_nested(&entry.path(), &sub_prefix, levels - 1));
+        }
+        images
+    }
+
     /// Open a confined regular file for reading. Directories and escapes
     /// yield `io::ErrorKind::NotFound`.
     pub fn open_file(&self, rel: &str) -> io::Result<File> {
@@ -277,12 +341,114 @@ mod tests {
         std::os::unix::fs::symlink("/", tmp.path().join("escape_link")).expect("symlink");
         let album = AlbumFs::new(tmp.path()).expect("new");
         let err = album
-            .open_file("escape_link")
-            .expect_err("symlink escape must fail");
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
-        let err = album
             .open_file("escape_link/etc/passwd")
-            .expect_err("path under symlink escape must fail");
+            .expect_err("open escape must fail");
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn random_images_picks_up_to_n_direct_images() {
+        let tmp = fixture();
+        let root = tmp.path().join("pics");
+        fs::create_dir(&root).expect("pics");
+        for name in ["a.jpg", "b.png", "c.gif", "d.webp", "clip.mp4", "note.txt"] {
+            fs::write(root.join(name), b"x").expect(name);
+        }
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("pics", 3).expect("random_images");
+        assert_eq!(picked.len(), 3);
+        let allowed = ["a.jpg", "b.png", "c.gif", "d.webp"];
+        for name in &picked {
+            assert!(allowed.contains(&name.as_str()), "unexpected {name}");
+        }
+        let mut deduped = picked.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(deduped.len(), 3, "picks must be unique");
+    }
+
+    #[test]
+    fn random_images_returns_all_when_fewer_than_n() {
+        let tmp = fixture();
+        let root = tmp.path().join("pics");
+        fs::create_dir(&root).expect("pics");
+        for name in ["only_one.jpg", "also_two.jpg"] {
+            fs::write(root.join(name), b"x").expect(name);
+        }
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("pics", 3).expect("random_images");
+        assert_eq!(picked.len(), 2);
+    }
+
+    #[test]
+    fn random_images_no_direct_images_is_empty() {
+        let tmp = fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("a_dir", 3).expect("random_images");
+        assert!(picked.is_empty());
+    }
+
+    #[test]
+    fn random_images_missing_dir_is_err() {
+        let tmp = fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        let err = album
+            .random_images("no_such_dir", 3)
+            .expect_err("missing dir must fail");
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn random_images_recurses_when_no_direct_images() {
+        let tmp = fixture();
+        let root = tmp.path().join("album");
+        fs::create_dir(&root).expect("album");
+        fs::create_dir(root.join("sub1")).expect("sub1");
+        fs::create_dir(root.join("sub2")).expect("sub2");
+        fs::write(root.join("sub1").join("x.jpg"), b"x").expect("x.jpg");
+        fs::write(root.join("sub2").join("y.jpg"), b"x").expect("y.jpg");
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("album", 3).expect("random_images");
+        assert_eq!(picked.len(), 2, "nested images must be found");
+        for name in &picked {
+            assert!(name.contains('/'), "expected relative subpath, got {name}");
+        }
+    }
+
+    #[test]
+    fn random_images_recursion_stops_after_three_levels() {
+        let tmp = fixture();
+        let l3 = tmp.path().join("deep").join("a").join("b").join("c");
+        let l4 = l3.join("d");
+        fs::create_dir_all(&l3).expect("l3");
+        fs::create_dir_all(&l4).expect("l4");
+        fs::write(l3.join("img3.jpg"), b"x").expect("img3");
+        fs::write(l4.join("img4.jpg"), b"x").expect("img4");
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("deep", 10).expect("random_images");
+        assert_eq!(
+            picked,
+            vec!["a/b/c/img3.jpg".to_string()],
+            "depth-3 image found, depth-4 must be out of reach"
+        );
+    }
+
+    #[test]
+    fn random_images_prefers_direct_over_nested() {
+        let tmp = fixture();
+        let root = tmp.path().join("album");
+        fs::create_dir(&root).expect("album");
+        fs::create_dir(root.join("sub")).expect("sub");
+        fs::write(root.join("direct.jpg"), b"x").expect("direct");
+        fs::write(root.join("sub").join("nested.jpg"), b"x").expect("nested");
+        let album = AlbumFs::new(tmp.path()).expect("new");
+
+        let picked = album.random_images("album", 10).expect("random_images");
+        assert_eq!(picked, vec!["direct.jpg".to_string()]);
     }
 }

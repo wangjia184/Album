@@ -73,10 +73,19 @@ export async function fetchMeta(rel: string, name: string): Promise<MediaMeta> {
   return (await fetchJson(`/api/fs/meta/${parts}`)) as MediaMeta
 }
 
+export async function fetchDirThumbs(folderRel: string, n = 3): Promise<string[]> {
+  const encoded = encodeSegments(folderRel)
+  const body = (await fetchJson(
+    `/api/fs/thumbs/${encoded}?n=${encodeURIComponent(String(n))}`,
+  )) as { images?: unknown }
+  if (!Array.isArray(body.images)) return []
+  return body.images.filter((image): image is string => typeof image === 'string')
+}
+
 export function fileUrl(rel: string, name: string): string {
   const parts = [
     ...rel.split('/').filter((segment) => segment.length > 0),
-    name,
+    ...name.split('/').filter((segment) => segment.length > 0),
   ].map(encodeURIComponent)
   return `/api/fs/file/${parts.join('/')}`
 }

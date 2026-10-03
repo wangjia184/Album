@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "fastrand",
  "image",
  "kamadak-exif",
  "mime_guess",

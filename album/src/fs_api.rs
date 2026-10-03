@@ -3,11 +3,12 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use axum::body::Body;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio_util::io::ReaderStream;
 
@@ -79,6 +80,33 @@ pub fn routes() -> Router<AppState> {
         .route("/fs/list/{*path}", get(list_path))
         .route("/fs/file/{*path}", get(file))
         .route("/fs/meta/{*path}", get(meta))
+        .route("/fs/thumbs/{*path}", get(thumbs))
+}
+
+#[derive(Deserialize)]
+struct ThumbsParams {
+    n: Option<usize>,
+}
+
+/// Random direct image names of a directory, for folder thumbnails.
+/// `n` defaults to 3, clamped to 1..=8; no direct images → empty array.
+async fn thumbs(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    Query(params): Query<ThumbsParams>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let root = resolve_root(&state, &headers)?;
+    let n = params.n.unwrap_or(3).clamp(1, 8);
+    let images = tokio::task::spawn_blocking(move || {
+        let album = AlbumFs::new(&root)?;
+        album.random_images(&path, n)
+    })
+    .await
+    .map_err(|_| internal())?
+    .map_err(map_io)?;
+
+    Ok(Json(json!({ "images": images })))
 }
 
 async fn list_impl(

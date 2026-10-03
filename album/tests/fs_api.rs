@@ -323,3 +323,107 @@ async fn health_still_works_with_fs_routes() {
     let json = body_json(response).await;
     assert_eq!(json["error"], "not_found");
 }
+
+/// Tempdir with `pics/` holding 10 jpgs + 1 mp4 (mp4 must never be picked).
+fn pics_fixture() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let pics = tmp.path().join("pics");
+    std::fs::create_dir(&pics).expect("pics");
+    for i in 0..10 {
+        std::fs::write(pics.join(format!("img_{i}.jpg")), b"jpg").expect("write img");
+    }
+    std::fs::write(pics.join("clip.mp4"), b"mp4").expect("write mp4");
+    tmp
+}
+
+#[tokio::test]
+async fn thumbs_returns_three_unique_direct_images() {
+    let tmp = pics_fixture();
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/pics?n=3").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    let images = json["images"].as_array().expect("images array");
+    assert_eq!(images.len(), 3, "default-ish n=3 must pick 3");
+    let mut names: Vec<String> = images
+        .iter()
+        .map(|v| v.as_str().expect("string image name").to_string())
+        .collect();
+    for name in &names {
+        assert!(
+            name.ends_with(".jpg"),
+            "must only pick images, got {name}"
+        );
+    }
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), 3, "picks must be unique");
+}
+
+#[tokio::test]
+async fn thumbs_no_direct_images_returns_empty_array() {
+    let tmp = fixture(); // a_dir contains only nested.txt
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/a_dir?n=3").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert!(json["images"].is_array());
+    assert_eq!(json["images"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn thumbs_missing_path_404_json() {
+    let tmp = fixture();
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/nope").await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let json = body_json(response).await;
+    assert_eq!(json["error"], "not_found");
+}
+
+#[tokio::test]
+async fn thumbs_default_n_is_three() {
+    let tmp = pics_fixture();
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/pics").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert_eq!(json["images"].as_array().expect("images").len(), 3);
+}
+
+#[tokio::test]
+async fn thumbs_n_clamped_to_eight() {
+    let tmp = pics_fixture(); // 10 images
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/pics?n=100").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    assert_eq!(json["images"].as_array().expect("images").len(), 8);
+}
+
+#[tokio::test]
+async fn thumbs_recurses_when_no_direct_images() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let album_dir = tmp.path().join("album");
+    std::fs::create_dir_all(album_dir.join("sub")).expect("sub");
+    std::fs::write(album_dir.join("sub").join("nested.jpg"), b"jpg").expect("write");
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/thumbs/album?n=3").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = body_json(response).await;
+    let images = json["images"].as_array().expect("images array");
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0], "sub/nested.jpg");
+}

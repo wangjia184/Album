@@ -19,6 +19,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 utoipa = "6"
 utoipa-swagger-ui = { version = "10", features = ["axum"] }
 kamadak-exif = "0.6"
+fastrand = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "avif"] }
 
 [dev-dependencies]
