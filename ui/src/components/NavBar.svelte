@@ -7,7 +7,7 @@
   const isAlbum = $derived(route === '/album' || (route ?? '').startsWith('/album/'))
 </script>
 
-<div class="navbar bg-primary text-primary-content sticky top-0 z-40 shadow">
+<div class="navbar sticky top-0 z-40 border-b border-base-300 bg-base-100/70 text-base-content backdrop-blur-md shadow-sm">
   <div class="navbar-start">
     <div class="flex-none lg:hidden">
       <details class="dropdown">
@@ -25,15 +25,15 @@
           </svg>
         </summary>
         <ul class="menu dropdown-content z-50 mt-2 w-52 rounded-box bg-base-100 p-2 text-lg text-base-content shadow-lg">
-          <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+          <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">✨</span>流光</a></li>
           <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
         </ul>
       </details>
     </div>
     <div class="hidden gap-1 lg:flex">
       <ul class="menu menu-horizontal gap-1 px-1 text-lg">
-        <li><a href="#/" class={isHome ? 'bg-base-100 text-primary rounded-lg shadow-sm font-medium' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-        <li><a href="#/album" class={isAlbum ? 'bg-base-100 text-primary rounded-lg shadow-sm font-medium' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
+        <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium rounded-lg' : ''}><span aria-hidden="true">✨</span>流光</a></li>
+        <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary font-medium rounded-lg' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
       </ul>
     </div>
   </div>
