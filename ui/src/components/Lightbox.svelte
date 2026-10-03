@@ -21,7 +21,7 @@
 
   const item = $derived(index >= 0 && index < items.length ? items[index] : null)
   const url = $derived(item === null ? '' : fileUrl(rel, item.name))
-  const absoluteUrl = $derived(item === null ? '' : new URL(url, window.location.origin).href)
+  const pageUrl = $derived(window.location.href)
   const canPrev = $derived(index > 0)
   const canNext = $derived(index < items.length - 1)
 
@@ -30,11 +30,11 @@
   let copyTimer: ReturnType<typeof setTimeout> | undefined
 
   async function copyLink(): Promise<void> {
-    if (absoluteUrl === '') return
+    if (pageUrl === '') return
     let ok = false
     try {
       if (navigator.clipboard !== undefined && window.isSecureContext) {
-        await navigator.clipboard.writeText(absoluteUrl)
+        await navigator.clipboard.writeText(pageUrl)
         ok = true
       }
     } catch {
@@ -43,7 +43,7 @@
     if (!ok) {
       // HTTP / non-secure contexts: fallback textarea + execCommand
       const ta = document.createElement('textarea')
-      ta.value = absoluteUrl
+      ta.value = pageUrl
       ta.setAttribute('readonly', '')
       ta.style.position = 'fixed'
       ta.style.left = '-9999px'

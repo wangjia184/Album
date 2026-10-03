@@ -19,3 +19,9 @@ export function prefixHref(segments: string[], lastIndex: number): string {
 export function childHref(parentPath: string, name: string): string {
   return albumHref([...toSegments(parentPath), name])
 }
+
+export function mediaHref(parentPath: string, name: string | null): string {
+  const base = albumHref(toSegments(parentPath))
+  if (name === null || name === '') return base
+  return `${base}?m=${encodeURIComponent(name)}`
+}

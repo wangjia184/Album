@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { replace, router } from 'svelte-spa-router'
   import { listDir, type ListResponse } from '../lib/api'
-  import { normalizePath } from '../lib/path'
+  import { mediaHref, normalizePath } from '../lib/path'
   import Breadcrumb from '../components/Breadcrumb.svelte'
   import Gallery from '../components/Gallery.svelte'
   import Lightbox from '../components/Lightbox.svelte'
@@ -9,10 +10,17 @@
 
   const path = $derived(normalizePath(params.wild))
 
+  const requestedMedia = $derived.by(() => {
+    const qs = router.querystring
+    const name = new URLSearchParams(qs || '').get('m') ?? null
+    return name
+  })
+
   let data = $state<ListResponse | null>(null)
   let loading = $state(true)
   let error = $state<string | null>(null)
   let lightboxIndex = $state<number | null>(null)
+  let syncing = $state(false)
 
   const dirs = $derived(
     data === null
@@ -29,20 +37,43 @@
   const empty = $derived(data !== null && dirs.length === 0 && media.length === 0)
   const rootName = $derived(data?.rootName ?? '')
 
+  function findMediaIndex(name: string | null): number {
+    if (name === null) return -1
+    return media.findIndex((child) => child.name === name)
+  }
+
+  function syncUrl(name: string | null): void {
+    if (syncing) return
+    syncing = true
+    replace(mediaHref(path, name))
+    // replace() resolves after the next tick; clear flag after the router applies
+    requestAnimationFrame(() => {
+      syncing = false
+    })
+  }
+
   function openLightbox(index: number): void {
     lightboxIndex = index
+    const item = media[index]
+    if (item !== undefined) syncUrl(item.name)
   }
 
   function closeLightbox(): void {
     lightboxIndex = null
+    syncUrl(null)
   }
 
   function navigateLightbox(delta: number): void {
     if (lightboxIndex === null) return
     const next = lightboxIndex + delta
-    if (next >= 0 && next < media.length) lightboxIndex = next
+    if (next >= 0 && next < media.length) {
+      lightboxIndex = next
+      const item = media[next]
+      if (item !== undefined) syncUrl(item.name)
+    }
   }
 
+  // Load directory when path changes.
   $effect(() => {
     let cancelled = false
     loading = true
@@ -63,6 +94,19 @@
     )
     return () => {
       cancelled = true
+    }
+  })
+
+  // Reconcile `?m=` against the loaded media list.
+  $effect(() => {
+    void requestedMedia
+    const list = data
+    if (list === null) return
+    const idx = findMediaIndex(requestedMedia)
+    if (idx >= 0) {
+      lightboxIndex = idx
+    } else {
+      lightboxIndex = null
     }
   })
 </script>
