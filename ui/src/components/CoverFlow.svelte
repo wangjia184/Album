@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { push } from 'svelte-spa-router'
   import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
   import { applyPreset, slotOpacity, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
@@ -117,7 +116,9 @@
     if (item === null) return
     if (k === Math.round(p)) {
       const { dir, file } = splitMediaPath(item.path)
-      push(mediaHref(dir, file))
+      // open the album lightbox in a new tab (click is a user gesture —
+      // window.open won't be popup-blocked)
+      window.open(new URL(mediaHref(dir, file), location.href).href, '_blank')
       return
     }
     const delta = k - Math.round(p) // capture BEFORE the move
