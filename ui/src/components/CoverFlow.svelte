@@ -54,10 +54,12 @@
     const phi = rad(d * POS_DELTA)
     const R = side / 2 / Math.tan(rad(POS_DELTA) / 2) * STACK
     const theta = Math.sign(d) * Math.min(Math.abs(d), 1) * WING_ANGLE
-    // Depth bias must scale with S: push each wing fully behind the center
-    // plane (inner edge z ≤ 0) so center/wing planes never intersect —
-    // nearest-wins depth then matches iPad, statically and in motion.
-    const back = d === 0 ? 0 : (side / 2) * Math.sin(rad(WING_ANGLE)) + 24
+    // Depth bias must scale with S AND stay continuous in d: wings parked at
+    // |d|>=1 sit fully behind the center plane (inner edge z ≤ 0, no plane
+    // intersection), while fractional d ramps smoothly — a step at d===0
+    // would teleport cards 200+px in one frame mid-animation.
+    const backFull = (side / 2) * Math.sin(rad(WING_ANGLE)) + 24
+    const back = backFull * Math.min(Math.abs(d), 1)
     return {
       theta,
       tx: R * Math.sin(phi),
