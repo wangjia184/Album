@@ -5,7 +5,13 @@
   // No animation, no photos, no queue fetch — those come in later steps.
   // Render layer: CSS 3D (perspective + transform3d), one div per virtual slot.
 
-  const THETA = 60 // deg, saturated rotation at |d| >= 1
+  // CoverFlow arc model (spec): slots stand on a circle segment in the
+  // ground plane, cover planes radial to the circle. Single variable d = k-p.
+  //   phi  = d * DELTA
+  //   x    = R * sin(phi),  z = -R * (1 - cos(phi))
+  //   R    = (S/2) * cot(DELTA/2)   <- adjacent edge-mids coincide exactly
+  //                                  (both dock equations collapse to this R)
+  const DELTA = 24 // deg per slot — the one free look parameter
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
@@ -17,31 +23,22 @@
   const S = $derived(Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40)))
 
   interface SlotXf {
-    theta: number
+    theta: number // deg, = +phi (radial/normal alignment)
     tx: number
     tz: number
+    phiDeg: number
   }
 
   function f(d: number, side: number): SlotXf {
     const rad = (deg: number): number => (deg * Math.PI) / 180
-    const ad = Math.abs(d)
-    const ae = Math.min(ad, 1)
-    const theta = Math.sign(d) * ae * THETA
-    const cosMax = Math.cos(rad(THETA))
-    const cosCur = Math.cos(rad(ae * THETA))
-
-    let tx: number
-    if (ad <= 1) {
-      // Dock: the inner registration point (edge mid) sits on the fold line
-      // at x = ±S/2 of the center square, in the center plane (z = 0).
-      tx = Math.sign(d) * (side / 2) * (1 + cosCur)
-    } else {
-      // Beyond the fold: continue the angled row edge-to-edge
-      // (pitch = S * cos(THETA)) — tight, clipped by the stage (no terminus).
-      tx = Math.sign(d) * ((side / 2) * (1 + cosMax) + (ad - 1) * side * cosMax)
+    const phi = rad(d * DELTA)
+    const R = side / 2 / Math.tan(rad(DELTA) / 2)
+    return {
+      theta: d * DELTA,
+      tx: R * Math.sin(phi),
+      tz: -R * (1 - Math.cos(phi)),
+      phiDeg: d * DELTA,
     }
-    const tz = -(side / 2) * Math.sin(rad(ae * THETA))
-    return { theta, tx, tz }
   }
 
   const indices = $derived(
@@ -70,6 +67,7 @@
         data-cf-slot
         data-d={d}
         data-k={k}
+        data-theta={t.theta}
         style:width="{S}px"
         style:height="{S}px"
         style:transform="translate(-50%, -50%) translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
