@@ -1,8 +1,8 @@
-import Redirect from './components/Redirect.svelte'
 import Browse from './pages/Browse.svelte'
+import Home from './pages/Home.svelte'
 
 export const routes = {
-  '/': Redirect,
+  '/': Home,
   '/album': Browse,
   '/album/*': Browse,
 }
