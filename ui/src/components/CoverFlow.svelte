@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   // CoverFlow — Step 1: static model verification.
   // Everything visible is a pure function of d = k - p (see spec):
-  //   theta(d), tx(d) (registration-point docking), tz(d), scale(d).
+  //   phi(d), x/z on the circle segment, theta(d) radial.
   // No animation, no photos, no queue fetch — those come in later steps.
   // Render layer: CSS 3D (perspective + transform3d), one div per virtual slot.
 
@@ -11,7 +12,8 @@
   //   x    = R * sin(phi),  z = -R * (1 - cos(phi))
   //   R    = (S/2) * cot(DELTA/2)   <- adjacent edge-mids coincide exactly
   //                                  (both dock equations collapse to this R)
-  const DELTA = 24 // deg per slot — the one free look parameter
+  const DELTA = 28 // deg per slot — 3*DELTA=84 < 90 (no face-flip), pulls
+                   // wings into the depth so d2/d3 stay on screen at 1280px
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
@@ -44,14 +46,42 @@
   const indices = $derived(
     Array.from({ length: 2 * M + 1 }, (_, i) => i - M),
   )
+
+  let stageEl = $state<HTMLDivElement | null>(null)
+
+  // Pin the stage to the VISUAL viewport: 100vw includes classic scrollbars
+  // (15px asymmetry), so set width/offset from measured layout instead.
+  function pinStage(): void {
+    if (stageEl === null) return
+    const parentLeft = stageEl.parentElement?.getBoundingClientRect().left ?? 0
+    stageEl.style.marginLeft = `${-parentLeft}px`
+    stageEl.style.width = `${document.documentElement.clientWidth}px`
+  }
+
+  onMount(() => {
+    pinStage()
+    const onResize = (): void => pinStage()
+    window.addEventListener('resize', onResize)
+    // Parent geometry can settle after mount (scrollbar/fonts) — re-pin.
+    let po: ResizeObserver | null = null
+    if (stageEl !== null && stageEl.parentElement !== null) {
+      po = new ResizeObserver(() => pinStage())
+      po.observe(stageEl.parentElement)
+    }
+    return () => {
+      window.removeEventListener('resize', onResize)
+      po?.disconnect()
+    }
+  })
 </script>
 
 <div
-  class="flex min-h-0 flex-1 flex-col items-center justify-center"
+  class="flex min-h-0 flex-1 flex-col justify-center"
   data-testid="coverflow"
 >
   <div
-    class="cf-stage relative h-[min(600px,calc(100dvh-14rem))] w-full"
+    class="cf-stage relative h-[min(600px,calc(100dvh-14rem))]"
+    bind:this={stageEl}
     bind:clientHeight={stageH}
     data-testid="cover-stage"
   >
@@ -70,7 +100,9 @@
         data-theta={t.theta}
         style:width="{S}px"
         style:height="{S}px"
-        style:transform="translate(-50%, -50%) translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
+        style:margin-left="{-S / 2}px"
+        style:margin-top="{-S / 2}px"
+        style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
       >
         <!-- three registration points: center, left-edge mid, right-edge mid -->
         <span class="cf-point bg-info" style:left="50%" style:top="50%"></span>

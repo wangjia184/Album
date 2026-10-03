@@ -103,7 +103,9 @@
 
 <div class="flex h-dvh flex-col overflow-hidden">
   <NavBar />
-  <main class="container relative z-10 mx-auto flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+  <main
+    class="container relative z-10 mx-auto flex min-h-0 flex-1 flex-col overflow-x-clip overflow-y-auto p-4"
+  >
     <Router {routes} />
   </main>
 </div>
