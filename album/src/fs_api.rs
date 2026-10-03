@@ -71,6 +71,7 @@ pub fn routes() -> Router<AppState> {
         .route("/fs/file/{*path}", get(file))
         .route("/fs/meta/{*path}", get(meta))
         .route("/fs/thumbs/{*path}", get(thumbs))
+        .route("/fs/queue", get(queue))
 }
 
 #[derive(Deserialize)]
@@ -97,6 +98,32 @@ async fn thumbs(
     .map_err(map_io)?;
 
     Ok(Json(json!({ "images": images })))
+}
+
+#[derive(Deserialize)]
+struct QueueParams {
+    offset: Option<u64>,
+    limit: Option<usize>,
+}
+
+/// Shuffled playback window for this request's mount root.
+/// `offset` is normalized ` % len` server-side; `limit` clamps to 1..=64
+/// (default 12). Empty queue → empty images, `nextOffset` 0 (never `% 0`).
+async fn queue(
+    State(state): State<AppState>,
+    Query(params): Query<QueueParams>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let root = resolve_root(&state, &headers)?;
+    let q = state.queues.get(&root).cloned().ok_or_else(not_found)?;
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(12).clamp(1, 64);
+    let w = q.window(offset, limit);
+    Ok(Json(json!({
+        "images": w.images,
+        "nextOffset": w.next_offset,
+        "done": w.done,
+    })))
 }
 
 async fn list_impl(

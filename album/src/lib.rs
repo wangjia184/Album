@@ -5,6 +5,10 @@ pub mod mount;
 pub mod queue;
 pub mod static_files;
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use axum::http::{header, HeaderValue, Method};
 use axum::Router;
 use tower_http::cors::CorsLayer;
@@ -12,17 +16,33 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::mount::MountTable;
+use crate::queue::ImageQueue;
 
-/// Shared handler state: hostname mounts for the FS API.
+/// Hostname mounts plus one playback queue per unique mount root.
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
     pub mounts: MountTable,
+    pub queues: Arc<HashMap<PathBuf, Arc<ImageQueue>>>,
 }
 
 impl AppState {
     /// State with no mounts (health/CORS/swagger/static tests).
     pub fn empty() -> Self {
         Self::default()
+    }
+
+    /// State for a full server: spawns one playback queue per unique mount root.
+    pub fn new(mounts: MountTable) -> Self {
+        let mut queues: HashMap<PathBuf, Arc<ImageQueue>> = HashMap::new();
+        for root in mounts.roots() {
+            queues
+                .entry(root.clone())
+                .or_insert_with(|| ImageQueue::start(root.clone()));
+        }
+        Self {
+            mounts,
+            queues: Arc::new(queues),
+        }
     }
 }
 

@@ -24,6 +24,11 @@ impl MountTable {
             .or_else(|| self.entries.iter().find(|(k, _)| k == STAR))
             .map(|(_, path)| path)
     }
+
+    /// All configured roots, in mount order (duplicates possible).
+    pub fn roots(&self) -> impl Iterator<Item = &PathBuf> {
+        self.entries.iter().map(|(_, path)| path)
+    }
 }
 
 impl FromIterator<(String, PathBuf)> for MountTable {

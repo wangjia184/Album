@@ -23,7 +23,10 @@ fn app_with(tmp: &tempfile::TempDir) -> Router {
         ("localhost".to_string(), tmp.path().to_path_buf()),
         ("*".to_string(), tmp.path().to_path_buf()),
     ]);
-    build_app(AppState { mounts })
+    build_app(AppState {
+        mounts,
+        ..Default::default()
+    })
 }
 
 async fn get(app: &Router, uri: &str) -> axum::response::Response {
@@ -126,7 +129,10 @@ async fn list_dotdot_returns_404_json() {
 async fn host_header_strips_port_and_maps_mount() {
     let tmp = fixture();
     let mounts = MountTable::from_iter([("example.test".to_string(), tmp.path().to_path_buf())]);
-    let app = build_app(AppState { mounts });
+    let app = build_app(AppState {
+        mounts,
+        ..Default::default()
+    });
 
     let response = get_host(&app, "/api/fs/list", "example.test:3000").await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -142,7 +148,10 @@ async fn unknown_host_falls_back_to_star_or_404() {
 
     // mounts only ("*", tmp): Host: nope.example → 200
     let star_only = MountTable::from_iter([("*".to_string(), tmp.path().to_path_buf())]);
-    let app = build_app(AppState { mounts: star_only });
+    let app = build_app(AppState {
+        mounts: star_only,
+        ..Default::default()
+    });
     let response = get_host(&app, "/api/fs/list", "nope.example").await;
     assert_eq!(response.status(), StatusCode::OK);
     let json = body_json(response).await;
@@ -150,7 +159,10 @@ async fn unknown_host_falls_back_to_star_or_404() {
 
     // mounts empty: Host: nope → 404
     let empty = MountTable::from_iter([]);
-    let app = build_app(AppState { mounts: empty });
+    let app = build_app(AppState {
+        mounts: empty,
+        ..Default::default()
+    });
     let response = get_host(&app, "/api/fs/list", "nope").await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let json = body_json(response).await;
@@ -352,10 +364,7 @@ async fn thumbs_returns_three_unique_direct_images() {
         .map(|v| v.as_str().expect("string image name").to_string())
         .collect();
     for name in &names {
-        assert!(
-            name.ends_with(".jpg"),
-            "must only pick images, got {name}"
-        );
+        assert!(name.ends_with(".jpg"), "must only pick images, got {name}");
     }
     names.sort();
     names.dedup();

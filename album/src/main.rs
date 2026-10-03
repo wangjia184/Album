@@ -44,7 +44,7 @@ async fn main() {
         .await
         .expect("failed to bind listener");
     tracing::info!("listening on {addr}");
-    axum::serve(listener, album::build_app(album::AppState { mounts }))
+    axum::serve(listener, album::build_app(album::AppState::new(mounts)))
         .await
         .expect("server error");
 }
