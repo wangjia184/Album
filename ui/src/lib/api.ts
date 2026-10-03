@@ -7,6 +7,7 @@ export interface ListedChild {
 
 export interface ListResponse {
   path: string
+  rootName: string
   children: ListedChild[]
 }
 

@@ -72,14 +72,17 @@ async fn list_impl(
 ) -> Result<Json<Value>, ApiError> {
     let root = resolve_root(&state, &headers)?;
     let path_echo = rel.clone();
-    let children = tokio::task::spawn_blocking(move || {
+    let (root_name, children) = tokio::task::spawn_blocking(move || {
         let album = AlbumFs::new(&root)?;
-        album.list_children(&rel)
+        let children = album.list_children(&rel)?;
+        Ok::<_, io::Error>((album.root_name(), children))
     })
     .await
     .map_err(|_| internal())?
     .map_err(map_io)?;
-    Ok(Json(json!({ "path": path_echo, "children": children })))
+    Ok(Json(
+        json!({ "path": path_echo, "rootName": root_name, "children": children }),
+    ))
 }
 
 async fn list_root(

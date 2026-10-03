@@ -59,6 +59,12 @@ async fn list_root_ok_and_sorted() {
 
     let json = body_json(response).await;
     assert_eq!(json["path"], "");
+    let expected_root = tmp
+        .path()
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    assert_eq!(json["rootName"], expected_root);
     let children = json["children"].as_array().expect("children array");
     let names: Vec<&str> = children
         .iter()
@@ -92,6 +98,12 @@ async fn list_nested_path_echoes_normalized_path() {
 
     let json = body_json(response).await;
     assert_eq!(json["path"], "a_dir");
+    let expected_root = tmp
+        .path()
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    assert_eq!(json["rootName"], expected_root);
     let children = json["children"].as_array().expect("children array");
     assert!(children
         .iter()

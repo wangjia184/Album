@@ -58,6 +58,15 @@ impl AlbumFs {
         Ok(Self { root })
     }
 
+    /// Basename of the mount root (e.g. `/workspace/.www` → `.www`).
+    /// Returns `""` for `/` or when the path has no final component.
+    pub fn root_name(&self) -> String {
+        self.root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
     /// Parse `rel` into a safe relative path: reject absolute, `.`, `..`,
     /// empty segments, and interior NUL; empty `rel` maps to root.
     fn parse_rel(rel: &str) -> io::Result<PathBuf> {

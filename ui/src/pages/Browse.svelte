@@ -27,6 +27,7 @@
         ),
   )
   const empty = $derived(data !== null && dirs.length === 0 && media.length === 0)
+  const rootName = $derived(data?.rootName ?? '')
 
   function openLightbox(index: number): void {
     lightboxIndex = index
@@ -67,7 +68,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <Breadcrumb {path} />
+  <Breadcrumb {path} {rootName} />
 
   {#if loading}
     <div class="flex justify-center py-8">
