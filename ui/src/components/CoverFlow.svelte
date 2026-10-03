@@ -12,15 +12,16 @@
   //   x    = R * sin(phi),  z = -R * (1 - cos(phi))
   //   R    = (S/2) * cot(DELTA/2)   <- adjacent edge-mids coincide exactly
   //                                  (both dock equations collapse to this R)
-  const DELTA = 28 // deg per slot — 3*DELTA=84 < 90 (no face-flip), pulls
-                   // wings into the depth so d2/d3 stay on screen at 1280px
-  const STACK = 0.86 // pull wing positions inward so each successive cover
-                     // occludes part of the previous one — tuned so every
-                     // layer keeps a visible band under perspective
-  const THETA_CAP = 60 // deg — beyond ~60° a square's projection FOLDS BACK
-                       // (outer edge lands inboard of inner edge) and far
-                       // cards collapse onto each other; iPad CF never goes
-                       // near edge-on. Position keeps DELTA; facing caps here.
+  const POS_DELTA = 10 // deg per slot for POSITION — gentle curvature only
+                       // (deflection ≈ (S/2)·sinΔ·STACK ≈ 40px: reads nearly
+                       // straight like iPad CF, still recedes in depth)
+  const WING_ANGLE = 38 // deg — ALL wings face the same moderate angle (iPad
+                        // side covers show art, they are not edge-on slivers;
+                        // uniform width + fixed pitch = natural overlap)
+  const STACK = 0.55 // pull wing positions inward so each successive cover
+                     // occludes part of the previous one (≈30px+ at the
+                     // straight-line pitch)
+  const THETA_CAP = 60 // deg safety — projection fold-back guard (unused at 38)
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
@@ -40,14 +41,14 @@
 
   function f(d: number, side: number): SlotXf {
     const rad = (deg: number): number => (deg * Math.PI) / 180
-    const phi = rad(d * DELTA)
-    const R = side / 2 / Math.tan(rad(DELTA) / 2) * STACK
-    const theta = Math.sign(d) * Math.min(Math.abs(d * DELTA), THETA_CAP)
+    const phi = rad(d * POS_DELTA)
+    const R = side / 2 / Math.tan(rad(POS_DELTA) / 2) * STACK
+    const theta = Math.sign(d) * Math.min(Math.abs(d), 1) * WING_ANGLE
     return {
       theta,
       tx: R * Math.sin(phi),
       tz: -R * (1 - Math.cos(phi)),
-      phiDeg: d * DELTA,
+      phiDeg: d * POS_DELTA,
     }
   }
 
