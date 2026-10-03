@@ -183,3 +183,16 @@ main:has([aria-modal='true']) {
   top: 50%;
   will-change: transform;
 }
+.cf-slot {
+  overflow: visible;
+}
+/* Registration point: 10px dot pinned to a plane coordinate
+   (center / left-edge mid / right-edge mid) via translate(-50%,-50%). */
+.cf-point {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}

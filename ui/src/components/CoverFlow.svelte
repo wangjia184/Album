@@ -62,7 +62,11 @@
       {@const d = k - P}
       {@const t = f(d, S)}
       <div
-        class="cf-slot flex items-center justify-center rounded-lg bg-base-300/50 ring-1 ring-base-100/30"
+        class="cf-slot rounded-lg {d === 0
+          ? 'border-2 border-primary bg-primary/10'
+          : Math.abs(d) <= 1
+            ? 'border border-secondary/80 bg-base-300/50'
+            : 'border border-base-100/40 bg-base-300/30'}"
         data-cf-slot
         data-d={d}
         data-k={k}
@@ -70,8 +74,13 @@
         style:height="{S}px"
         style:transform="translate(-50%, -50%) translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
       >
-        <span class="select-none text-center text-xs leading-4 opacity-70">
-          k {k}<br />d {d}
+        <!-- three registration points: center, left-edge mid, right-edge mid -->
+        <span class="cf-point bg-info" style:left="50%" style:top="50%"></span>
+        <span class="cf-point bg-accent" style:left="0" style:top="50%"></span>
+        <span class="cf-point bg-accent" style:left="100%" style:top="50%"></span>
+        <span class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center select-none text-center">
+          <span class="text-sm font-semibold leading-4 opacity-90">d {d}</span>
+          <span class="text-[10px] leading-3 opacity-50">k {k}</span>
         </span>
       </div>
     {/each}
