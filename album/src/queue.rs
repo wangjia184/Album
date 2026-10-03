@@ -13,11 +13,17 @@ pub struct ImageQueue {
     done: AtomicBool,
 }
 
-/// A window of the queue starting at a normalized cursor.
+/// One queue entry: absolute index in the shuffled array + mount-relative path.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct QueueItem {
+    pub index: u64,
+    pub path: String,
+}
+
+/// A window of the queue: `limit` items (wrap-inside) plus the scan `done` flag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueWindow {
-    pub images: Vec<String>,
-    pub next_offset: u64,
+    pub items: Vec<QueueItem>,
     pub done: bool,
 }
 
@@ -51,29 +57,40 @@ impl ImageQueue {
         q
     }
 
-    /// Cursor window: `offset % len` start, wrap-inside for `limit`,
-    /// `next_offset = (start + 1) % len`. Empty queue never takes `% 0`.
-    pub fn window(&self, offset: u64, limit: usize) -> QueueWindow {
+    /// Cursor window over the shuffled array. Empty queue never takes `% 0`.
+    ///
+    /// - `center=false`: starts at `offset % len` (forward window).
+    /// - `center=true`: `offset` names the *current* photo; it lands at slot
+    ///   `mid = (limit-1)/2`, with `floor_mod` wrapping so `offset < mid`
+    ///   never underflows. Client never sends negative offsets.
+    pub fn window(&self, offset: u64, limit: usize, center: bool) -> QueueWindow {
         let images = self.images.lock().expect("queue mutex");
         let done = self.done.load(Ordering::Acquire);
         let len = images.len();
         if len == 0 {
             return QueueWindow {
-                images: Vec::new(),
-                next_offset: 0,
+                items: Vec::new(),
                 done,
             };
         }
         let len64 = len as u64;
-        let start = (offset % len64) as usize;
-        let slice = (0..limit)
-            .map(|i| images[((start as u64 + i as u64) % len64) as usize].clone())
+        let start = if center {
+            let mid = (limit.saturating_sub(1)) / 2;
+            let o = (offset % len64) as i64;
+            o.wrapping_sub(mid as i64).rem_euclid(len as i64) as usize % len
+        } else {
+            (offset % len64) as usize
+        };
+        let items = (0..limit)
+            .map(|i| {
+                let idx_us = (start + i) % len;
+                QueueItem {
+                    index: idx_us as u64,
+                    path: images[idx_us].clone(),
+                }
+            })
             .collect();
-        QueueWindow {
-            images: slice,
-            next_offset: ((start as u64 + 1) % len64),
-            done,
-        }
+        QueueWindow { items, done }
     }
 
     /// Spin until the collector marks the scan finished (test seam; 10s cap).
@@ -186,13 +203,21 @@ mod tests {
         tmp
     }
 
+    fn paths(w: &QueueWindow) -> Vec<&str> {
+        w.items.iter().map(|i| i.path.as_str()).collect()
+    }
+
+    fn indices(w: &QueueWindow) -> Vec<u64> {
+        w.items.iter().map(|i| i.index).collect()
+    }
+
     #[test]
     fn scan_collects_only_images_nested() {
         let tmp = fixture();
         let q = ImageQueue::start(tmp.path().to_path_buf());
         q.wait_until_ready();
-        let w = q.window(0, 3);
-        let mut got = w.images.clone();
+        let w = q.window(0, 3, false);
+        let mut got = paths(&w);
         got.sort();
         assert_eq!(got, ["a.jpg", "sub/b.png", "sub/deep/c.jpg"]);
         assert!(w.done);
@@ -207,11 +232,11 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), tmp.path().join("link")).expect("symlink");
         let q = ImageQueue::start(tmp.path().to_path_buf());
         q.wait_until_ready();
-        let w = q.window(0, 100);
+        let w = q.window(0, 100, false);
         assert!(
-            w.images.is_empty(),
+            w.items.is_empty(),
             "symlinked dir was followed: {:?}",
-            w.images
+            paths(&w)
         );
     }
 
@@ -233,14 +258,16 @@ mod tests {
         }
         // Sender still open: the 50ms recv_timeout must fire and shuffle the dirty batch.
         std::thread::sleep(Duration::from_millis(250));
-        let mid = q.window(0, 8);
-        assert_eq!(mid.images.len(), 8, "batch not received");
+        let mid = q.window(0, 8, false);
+        let got = paths(&mid);
+        assert_eq!(got.len(), 8, "batch not received");
+        let sent_refs: Vec<&str> = sent.iter().map(String::as_str).collect();
         assert_ne!(
-            mid.images, sent,
+            got, sent_refs,
             "timeout+dirty shuffle did not run while sender open"
         );
-        let mut a = mid.images.clone();
-        let mut b = sent.clone();
+        let mut a = got;
+        let mut b = sent_refs;
         a.sort();
         b.sort();
         assert_eq!(a, b, "shuffle must be a permutation");
@@ -265,8 +292,8 @@ mod tests {
             std::thread::spawn(move || run_collector(rx, &qc, Duration::from_millis(50)));
 
         std::thread::sleep(Duration::from_millis(200));
-        let w = q.window(0, 10);
-        assert!(w.images.is_empty(), "unexpected data: {:?}", w.images);
+        let w = q.window(0, 10, false);
+        assert!(w.items.is_empty(), "unexpected data: {:?}", paths(&w));
         assert!(
             !q.done.load(Ordering::Acquire),
             "done set while sender open"
@@ -281,29 +308,66 @@ mod tests {
     }
 
     #[test]
-    fn from_paths_window_wrap_and_next() {
+    fn forward_window_items_and_indices() {
         let q = ImageQueue::from_paths(["a", "b", "c"].map(String::from).to_vec());
 
-        let w = q.window(2, 2);
-        assert_eq!(w.images, ["c", "a"]);
-        assert_eq!(w.next_offset, 0);
+        let w = q.window(2, 2, false);
+        assert_eq!(paths(&w), ["c", "a"]);
+        assert_eq!(indices(&w), [2, 0]);
         assert!(w.done);
-
-        let w = q.window(3, 2);
-        assert_eq!(w.images, ["a", "b"]);
-        assert_eq!(w.next_offset, 1);
-
-        let w = q.window(0, 0);
-        assert!(w.images.is_empty());
-        assert_eq!(w.next_offset, 1);
     }
 
     #[test]
-    fn from_paths_empty_window() {
+    fn empty_window_is_empty_even_with_center() {
         let q = ImageQueue::from_paths(Vec::new());
-        let w = q.window(u64::MAX, 12);
-        assert!(w.images.is_empty());
-        assert_eq!(w.next_offset, 0);
+        let w = q.window(u64::MAX, 12, true);
+        assert!(w.items.is_empty());
         assert!(w.done, "empty seeded queue counts as finished");
+    }
+
+    #[test]
+    fn center_places_offset_at_mid_odd_limit() {
+        // len=7, offset=5, limit=5 → mid=2, start=(5-2)=3 → indices [3,4,5,6,0]
+        let pool: Vec<String> = (0..7).map(|i| format!("p{i}")).collect();
+        let q = ImageQueue::from_paths(pool);
+        let w = q.window(5, 5, true);
+        assert_eq!(w.items.len(), 5);
+        assert_eq!(w.items[2].index, 5, "offset must land at mid");
+        assert_eq!(indices(&w), [3, 4, 5, 6, 0]);
+    }
+
+    #[test]
+    fn center_places_offset_at_mid_even_limit() {
+        // len=10, offset=3, limit=10 → mid=4, start=(3-4) rem_euclid 10 = 9
+        let pool: Vec<String> = (0..10).map(|i| format!("p{i}")).collect();
+        let q = ImageQueue::from_paths(pool);
+        let w = q.window(3, 10, true);
+        assert_eq!(w.items.len(), 10);
+        assert_eq!(w.items[4].index, 3, "offset must land at mid");
+        assert_eq!(indices(&w), [9, 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn center_offset_below_mid_wraps() {
+        // len=3, offset=0, limit=5 → mid=2, start=(0-2) rem_euclid 3 = 1
+        let pool: Vec<String> = (0..3).map(|i| format!("p{i}")).collect();
+        let q = ImageQueue::from_paths(pool);
+        let w = q.window(0, 5, true);
+        assert_eq!(w.items.len(), 5);
+        assert_eq!(w.items[2].index, 0, "offset must land at mid after wrap");
+        assert_eq!(indices(&w), [1, 2, 0, 1, 2]);
+    }
+
+    #[test]
+    fn center_index_sequence_is_contiguous() {
+        let pool: Vec<String> = (0..7).map(|i| format!("p{i}")).collect();
+        let q = ImageQueue::from_paths(pool);
+        let w = q.window(5, 9, true); // limit=9 → mid=4 → start=(5-4)=1; wraps > once
+        let expected: Vec<u64> = (0..9).map(|i| ((1 + i) % 7) as u64).collect();
+        assert_eq!(indices(&w), expected);
+        // paths must match their indices
+        for item in &w.items {
+            assert_eq!(item.path, format!("p{}", item.index));
+        }
     }
 }

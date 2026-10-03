@@ -104,11 +104,13 @@ async fn thumbs(
 struct QueueParams {
     offset: Option<u64>,
     limit: Option<usize>,
+    center: Option<bool>,
 }
 
 /// Shuffled playback window for this request's mount root.
-/// `offset` is normalized ` % len` server-side; `limit` clamps to 1..=64
-/// (default 12). Empty queue → empty images, `nextOffset` 0 (never `% 0`).
+/// `offset` is normalized `% len` server-side; `limit` clamps to 1..=64
+/// (default 12); `center=true` anchors `offset` at slot `mid`.
+/// Empty queue → empty images (never `% 0`).
 async fn queue(
     State(state): State<AppState>,
     Query(params): Query<QueueParams>,
@@ -118,10 +120,9 @@ async fn queue(
     let q = state.queues.get(&root).cloned().ok_or_else(not_found)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(12).clamp(1, 64);
-    let w = q.window(offset, limit);
+    let w = q.window(offset, limit, params.center.unwrap_or(false));
     Ok(Json(json!({
-        "images": w.images,
-        "nextOffset": w.next_offset,
+        "images": w.items,
         "done": w.done,
     })))
 }

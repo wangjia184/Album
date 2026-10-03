@@ -43,63 +43,68 @@ async fn body_json(response: axum::response::Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+fn images_of(json: &serde_json::Value) -> Vec<(u64, String)> {
+    json["images"]
+        .as_array()
+        .expect("images array")
+        .iter()
+        .map(|item| {
+            (
+                item["index"].as_u64().expect("index"),
+                item["path"].as_str().expect("path").to_string(),
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
-async fn queue_basic_window_and_next_offset() {
+async fn queue_forward_window_indices() {
     let app = app_seeded(&["a", "b", "c", "d"]);
     let response = get(&app, "/api/fs/queue?offset=1&limit=2").await;
     assert_eq!(response.status(), StatusCode::OK);
     let json = body_json(response).await;
-    let images: Vec<&str> = json["images"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert_eq!(images, ["b", "c"]);
-    assert_eq!(json["nextOffset"], 2);
+    let items = images_of(&json);
+    assert_eq!(items, vec![(1, "b".to_string()), (2, "c".to_string())]);
     assert_eq!(json["done"], true);
+    assert!(json.get("nextOffset").is_none(), "nextOffset must be gone");
 }
 
 #[tokio::test]
 async fn queue_offset_beyond_len_wraps() {
     let app = app_seeded(&["a", "b", "c", "d"]);
-    let response = get(&app, "/api/fs/queue?offset=10&limit=4").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let json = body_json(response).await;
-    let images: Vec<&str> = json["images"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert_eq!(images, ["c", "d", "a", "b"]);
-    assert_eq!(json["nextOffset"], 3);
+    let json = body_json(get(&app, "/api/fs/queue?offset=10&limit=4").await).await;
+    let items = images_of(&json);
+    assert_eq!(
+        items,
+        vec![
+            (2, "c".to_string()),
+            (3, "d".to_string()),
+            (0, "a".to_string()),
+            (1, "b".to_string())
+        ]
+    );
 }
 
 #[tokio::test]
 async fn queue_window_wraps_at_tail() {
     let app = app_seeded(&["a", "b", "c", "d"]);
-    let response = get(&app, "/api/fs/queue?offset=3&limit=3").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let json = body_json(response).await;
-    let images: Vec<&str> = json["images"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert_eq!(images, ["d", "a", "b"]);
-    assert_eq!(json["nextOffset"], 0);
+    let json = body_json(get(&app, "/api/fs/queue?offset=3&limit=3").await).await;
+    let items = images_of(&json);
+    assert_eq!(
+        items,
+        vec![
+            (3, "d".to_string()),
+            (0, "a".to_string()),
+            (1, "b".to_string())
+        ]
+    );
 }
 
 #[tokio::test]
 async fn queue_empty_ok_no_modulo_zero() {
     let app = app_seeded(&[]);
-    let response = get(&app, "/api/fs/queue?offset=99&limit=12").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let json = body_json(response).await;
+    let json = body_json(get(&app, "/api/fs/queue?offset=99&limit=12&center=true").await).await;
     assert_eq!(json["images"].as_array().unwrap().len(), 0);
-    assert_eq!(json["nextOffset"], 0);
     assert_eq!(json["done"], true);
 }
 
@@ -133,6 +138,42 @@ async fn queue_negative_offset_400() {
 }
 
 #[tokio::test]
+async fn queue_center_true_places_offset_at_mid() {
+    // 20 paths, offset=5, limit=10 (even → mid=4): items[4].index==5,
+    // indices contiguous mod 20 starting at (5-4)=1
+    let many: Vec<String> = (0..20).map(|i| format!("p{i}")).collect();
+    let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+    let app = app_seeded(&refs);
+    let json = body_json(get(&app, "/api/fs/queue?offset=5&limit=10&center=true").await).await;
+    let items = images_of(&json);
+    assert_eq!(items.len(), 10);
+    assert_eq!(items[4].0, 5, "offset must land at mid");
+    let indices: Vec<u64> = items.iter().map(|(i, _)| *i).collect();
+    assert_eq!(indices, (1..=10).collect::<Vec<u64>>());
+    // paths match indices
+    for (idx, path) in &items {
+        assert_eq!(path, &format!("p{idx}"));
+    }
+}
+
+#[tokio::test]
+async fn queue_center_true_offset_below_mid_wraps() {
+    // 3 paths, offset=0, limit=5 → mid=2: items[2].index==0, len 5
+    let app = app_seeded(&["a", "b", "c"]);
+    let json = body_json(get(&app, "/api/fs/queue?offset=0&limit=5&center=true").await).await;
+    let items = images_of(&json);
+    assert_eq!(items.len(), 5);
+    assert_eq!(items[2].0, 0, "offset must land at mid after wrap");
+}
+
+#[tokio::test]
+async fn queue_center_invalid_value_400() {
+    let app = app_seeded(&["a"]);
+    let response = get(&app, "/api/fs/queue?offset=0&center=maybe").await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn queue_appstate_empty_404() {
     let app = build_app(AppState::empty());
     let response = get(&app, "/api/fs/queue?offset=0&limit=1").await;
@@ -158,13 +199,8 @@ async fn queue_spawns_at_startup() {
     let mut done = false;
     for _ in 0..100 {
         let json = body_json(get(&app, "/api/fs/queue?offset=0&limit=64").await).await;
-        let images: Vec<&str> = json["images"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_str().unwrap())
-            .collect();
-        if images.contains(&"nested/found.jpg") {
+        let items = images_of(&json);
+        if items.iter().any(|(_, p)| p == "nested/found.jpg") {
             found = true;
         }
         done = json["done"].as_bool().unwrap_or(false);
