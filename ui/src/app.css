@@ -172,7 +172,9 @@ main:has([aria-modal='true']) {
    .cf-stage owns the perspective camera; .cf-slot squares are absolutely
    centered and positioned purely via their inline transform3d. */
 .cf-stage {
-  perspective: 1200px;
+  /* 1600px (not 1200): weaker depth squeeze keeps screen-x of outer slots
+     monotonic — at 1200 + tight STACK, n+3's inner edge overtook n+2. */
+  perspective: 1600px;
   /* Far slots extend past the viewport on purpose — clip them so the angled
      row reads as endless (no visible terminus). */
   overflow: hidden;

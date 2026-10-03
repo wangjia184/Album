@@ -14,9 +14,13 @@
   //                                  (both dock equations collapse to this R)
   const DELTA = 28 // deg per slot — 3*DELTA=84 < 90 (no face-flip), pulls
                    // wings into the depth so d2/d3 stay on screen at 1280px
-  const STACK = 0.72 // pull wing positions inward along the arc so each
-                     // successive cover OCCLUDES part of the previous one
-                     // (orientation untouched; flat-layer z-index paints order)
+  const STACK = 0.86 // pull wing positions inward so each successive cover
+                     // occludes part of the previous one — tuned so every
+                     // layer keeps a visible band under perspective
+  const THETA_CAP = 60 // deg — beyond ~60° a square's projection FOLDS BACK
+                       // (outer edge lands inboard of inner edge) and far
+                       // cards collapse onto each other; iPad CF never goes
+                       // near edge-on. Position keeps DELTA; facing caps here.
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
@@ -38,8 +42,9 @@
     const rad = (deg: number): number => (deg * Math.PI) / 180
     const phi = rad(d * DELTA)
     const R = side / 2 / Math.tan(rad(DELTA) / 2) * STACK
+    const theta = Math.sign(d) * Math.min(Math.abs(d * DELTA), THETA_CAP)
     return {
-      theta: d * DELTA,
+      theta,
       tx: R * Math.sin(phi),
       tz: -R * (1 - Math.cos(phi)),
       phiDeg: d * DELTA,
@@ -93,10 +98,10 @@
       {@const t = f(d, S)}
       <div
         class="cf-slot rounded-lg {d === 0
-          ? 'border-2 border-primary bg-primary/10'
+          ? 'border-2 border-primary bg-primary'
           : Math.abs(d) <= 1
-            ? 'border border-secondary/80 bg-base-300/50'
-            : 'border border-base-100/40 bg-base-300/30'}"
+            ? 'border border-secondary bg-base-300'
+            : 'border border-base-100/50 bg-base-300/95'}"
         data-cf-slot
         data-d={d}
         data-k={k}
