@@ -61,7 +61,7 @@
       if (copyTimer !== undefined) clearTimeout(copyTimer)
       copyTimer = setTimeout(() => {
         copied = false
-      }, 1000)
+      }, 2000)
     }
   }
 
@@ -108,10 +108,18 @@
   >
     <header class="flex shrink-0 items-center gap-1 border-b border-base-300 p-2">
       <span class="min-w-0 flex-1 truncate px-2 text-sm opacity-80">{item.name}</span>
-      <span
-        class="tooltip tooltip-bottom {copied ? 'tooltip-open' : ''}"
-        data-tip="Url Copied"
-      >
+      <span class="relative flex items-center">
+        {#if copied}
+          <span
+            class="absolute bottom-full right-1/2 z-10 mb-2 -mr-2 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-base-100 px-2.5 py-1.5 text-sm shadow-lg ring-1 ring-base-300"
+            role="status"
+          >
+            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-success-content">
+              <Icon icon="ph:check-bold" class="h-3 w-3" />
+            </span>
+            Url Copied
+          </span>
+        {/if}
         <button
           type="button"
           class="btn btn-circle btn-sm btn-ghost"
