@@ -1,34 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  // CoverFlow — Step 1: static model verification.
-  // Everything visible is a pure function of d = k - p (see spec):
-  //   phi(d), x/z on the circle segment, theta(d) radial.
-  // No animation, no photos, no queue fetch — those come in later steps.
-  // Render layer: CSS 3D (perspective + transform3d), one div per virtual slot.
+  import { applyPreset, slotTransform } from '../lib/coverflow'
 
-  // CoverFlow arc model (spec): slots stand on a circle segment in the
-  // ground plane, cover planes radial to the circle. Single variable d = k-p.
-  //   phi  = d * DELTA
-  //   x    = R * sin(phi),  z = -R * (1 - cos(phi))
-  //   R    = (S/2) * cot(DELTA/2)   <- adjacent edge-mids coincide exactly
-  //                                  (both dock equations collapse to this R)
-  const POS_DELTA = 10 // deg per slot for POSITION — gentle curvature only
-                       // (deflection ≈ (S/2)·sinΔ·STACK ≈ 40px: reads nearly
-                       // straight like iPad CF, still recedes in depth)
-  const WING_ANGLE = 38 // deg — ALL wings face the same moderate angle (iPad
-                        // side covers show art, they are not edge-on slivers;
-                        // uniform width + fixed pitch = natural overlap)
-  const STACK = 0.55 // depth-curve weight for tz only (lane x no longer uses it)
-  const GAP_C = 1.2  // center-adjacent lane pitch ×S — collision-free per
-                     // point-in-both-quads oracle (live arc was 4 collisions);
-                     // gives the center card ~200px more breathing room in motion
-  const GAP_W = 0.5 // wing lane pitch ×S — 190px parent overlap (fine-grid collision-free, visibly covers after perspective)
-  const PROX_MAX = 220 // px: resting center bulges toward the camera at d=0
-                       // (perspective renders it ~16% larger); decays via
-                       // cos²(πd/2) to 0 by |d|=1 — the first thing a leaving
-                       // card does is retreat+shrink, as a pure f(d) animation.
-                       // z-forward only ⇒ never reduces wing clearance.
-  const THETA_CAP = 60 // deg safety — projection fold-back guard (unused at 38)
+  // View-layer only: animation loop, stage pinning, rendering. All slot
+  // geometry lives in lib/coverflow.ts (pure slotTransform(d, S), ratio-based,
+  // fine-grid collision-free presets — see that module's docs).
+  applyPreset('tightSeam') // GAP_C=1.0 / GAP_W=0.65 — swap to 'wingCover' for stronger overlap
+
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   // Playhead: the ONE animated state. Everything on screen is f(k - p).
   // Basic motion: ease p from n to n+1, rest, repeat. Drag/queue later.
@@ -48,45 +26,6 @@
   const S = $derived(
     Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40, stageW - 80)),
   )
-
-  interface SlotXf {
-    theta: number // deg, = +phi (radial/normal alignment)
-    tx: number
-    tz: number
-    phiDeg: number
-  }
-
-  function f(d: number, side: number): SlotXf {
-    const rad = (deg: number): number => (deg * Math.PI) / 180
-    const phi = rad(d * POS_DELTA)
-    const ad = Math.abs(d)
-    const sgn = Math.sign(d)
-    // Piecewise-linear lane: |d|≤1 uses the wider GAP_C pitch (motion safety —
-    // turning cards never interpenetrate neighbors), beyond uses tight GAP_W
-    // (parallel wings, overlap is depth-safe). Continuous at |d|=1.
-    const tx =
-      ad <= 1
-        ? sgn * side * GAP_C * ad
-        : sgn * (side * GAP_C + (ad - 1) * side * GAP_W)
-    const R = side / 2 / Math.tan(rad(POS_DELTA) / 2) * STACK
-    const theta = Math.sign(d) * Math.min(Math.abs(d), 1) * WING_ANGLE
-    // Depth bias must scale with S AND stay continuous in d: wings parked at
-    // |d|>=1 sit fully behind the center plane (inner edge z ≤ 0, no plane
-    // intersection), while fractional d ramps smoothly — a step at d===0
-    // would teleport cards 200+px in one frame mid-animation.
-    const backFull = (side / 2) * Math.sin(rad(WING_ANGLE)) + 24
-    const back = backFull * Math.min(Math.abs(d), 1)
-    // Proximity bulge: smooth tent peaked at d=0, zero slope at the peak,
-    // exactly 0 for |d| ≥ 1 (cos goes negative → max with 0).
-    const prox =
-      PROX_MAX * Math.pow(Math.max(0, Math.cos((Math.PI * Math.abs(d)) / 2)), 2)
-    return {
-      theta,
-      tx,
-      tz: -R * (1 - Math.cos(phi)) - back + prox,
-      phiDeg: d * POS_DELTA,
-    }
-  }
 
   const indices = $derived(
     // Virtual slots follow the playhead: k = round(p) + i. At the mid-point
@@ -177,7 +116,7 @@
     >
     {#each indices as k (k)}
       {@const d = k - p}
-      {@const t = f(d, S)}
+      {@const t = slotTransform(d, S)}
       <div
         class="cf-slot rounded-lg border border-base-100/40"
         data-cf-slot
