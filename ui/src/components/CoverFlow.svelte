@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { push } from 'svelte-spa-router'
   import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
-  import { applyPreset, slotTransform } from '../lib/coverflow'
+  import { applyPreset, slotOpacity, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
   import { mediaHref, toSegments } from '../lib/path'
 
@@ -241,6 +241,7 @@
           >
             <div
               class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+              style:opacity={slotOpacity(d)}
             >
               {#if item !== null}
               <img

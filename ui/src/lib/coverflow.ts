@@ -96,3 +96,17 @@ export function slotTransform(d: number, S: number): SlotXf {
     tz: -R * (1 - Math.cos(phi)) - back + prox,
   }
 }
+/**
+ * Visual prominence as a pure function of d: the resting center is most
+ * present (0.8) and cards fade toward the edges (0.2 at |d| ≥ 3).
+ * Applied on the inner (2D) frame so the slot's preserve-3d participation
+ * is untouched; multiplies with the img's load-fade (0→1).
+ */
+export const OPACITY_CENTER = 0.8
+export const OPACITY_EDGE = 0.2
+export const OPACITY_FALLOFF_D = 3 // matches M slots per side
+
+export function slotOpacity(d: number): number {
+  const t = Math.min(Math.abs(d), OPACITY_FALLOFF_D) / OPACITY_FALLOFF_D
+  return OPACITY_CENTER - (OPACITY_CENTER - OPACITY_EDGE) * t
+}
