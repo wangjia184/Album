@@ -19,15 +19,15 @@
           </svg>
         </summary>
         <ul class="menu dropdown-content z-50 mt-2 w-52 rounded-box bg-primary p-2 text-lg shadow-lg">
-          <li><a href="#/">朝花夕拾</a></li>
-          <li><a href="#/album">相册</a></li>
+          <li><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+          <li><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
         </ul>
       </details>
     </div>
     <div class="hidden gap-1 lg:flex">
       <ul class="menu menu-horizontal px-1 text-lg">
-        <li><a href="#/">朝花夕拾</a></li>
-        <li><a href="#/album">相册</a></li>
+        <li><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+        <li><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
       </ul>
     </div>
   </div>
