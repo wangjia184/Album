@@ -124,6 +124,7 @@ async fn queue(
     Ok(Json(json!({
         "images": w.items,
         "done": w.done,
+        "total": w.total,
     })))
 }
 

@@ -1,30 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
-  import { createCoverLoader } from '../lib/coverLoader'
+  import { fetchQueue, type QueueItem } from '../lib/api'
   import { applyPreset, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
   import { mediaHref, toSegments } from '../lib/path'
 
-  // ── Two strictly separated layers ──────────────────────────────────────
+  // ── Motion layer (pure index) ─────────────────────────────────────────
+  // Knowing one cover's index implies all others: slots are white boards
+  // keyed by integer display indices. Animation only mutates `p` (transform
+  // writes). The key window is expanded BEFORE a jump to cover the whole
+  // trajectory ± SPARE, frozen during motion, and re-based/shrunk at rest —
+  // always, whether or not any data fetch succeeds. Missing paths → white.
   //
-  // Motion layer (pure index): given the rest anchor `windowBase`, every
-  // slot key is `windowBase ± SPARE` and geometry is slotTransform(k − p).
-  // Knowing one index implies all others — no data, no image, no fetch is
-  // required to drive or complete a glide. Keys freeze for the whole
-  // animation; only `p` changes (transform writes only).
-  //
-  // Data/loader layer: at rest frames only, a queue window is fetched and
-  // index → path bindings are swapped in atomically. The loader then warms
-  // those paths off to the side (future: Web Worker). A missing/slow image
-  // leaves the white placeholder board visible — never blocks motion.
+  // ── Data layer (optional) ─────────────────────────────────────────────
+  // At rest only: fetch the queue window for badges / center-open. Failures
+  // never touch motion state. No image bytes are loaded in this component.
   applyPreset('tightSeam')
 
-  const SPARE = 4 // one spare slot each side beyond the ±3 visible range:
-                  // absorbs the ±1 key shift so key re-basing happens at rest
-  const SLOT_COUNT = 2 * SPARE + 1 // 9 placeholders (outer pair clips offscreen)
-  const LIMIT = SLOT_COUNT // fetch window = placeholder set
-  const MID = SPARE // center index inside a center=true window (=4)
+  const SPARE = 4 // spare slots each side beyond the visible ±3
+  const LIMIT = 2 * SPARE + 1 // fetch window (center=true → MID at center)
+  const MID = SPARE
   const MOVE_MS = 950
   const PAUSE_MS = 4050 // MOVE + PAUSE = 5s cycle
   const MAX_EMPTY_RETRIES = 30
@@ -34,13 +29,15 @@
   let p = $state(0) // playhead — the ONE animated state
   let status = $state<Status>('loading')
   let error = $state('')
-  let items = $state<QueueItem[]>([]) // latest fetched window (position → path)
-  let windowBase = $state(0) // integer anchor: keys = windowBase ± SPARE.
-                             // Frozen during motion; re-based only at rest.
+  // Display key window [keyLo, keyHi]; expanded before jumps, frozen in motion.
+  let keyLo = $state(-SPARE)
+  let keyHi = $state(SPARE)
+  let windowBase = $state(0) // rest anchor: center display key; motion-owned
+  let items = $state<QueueItem[]>([]) // queue window (display-centered on itemsBase)
+  let itemsBase: number | null = null // windowBase that `items` describes
   let centerQueueIdx = 0 // queue index of items[MID]
-  // index → path, swapped only at rest. null = white board (no data yet).
-  let bindings = $state<Record<number, string | null>>({})
-  const loader = createCoverLoader()
+  let queueTotal = 0 // full queue length (0 = unknown/empty)
+  let bindings = $state<Record<number, string | null>>({}) // key → path at rest
 
   const SLOT_MIN = 240
   const SLOT_MAX = 660
@@ -50,13 +47,66 @@
     Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40, stageW - 80)),
   )
 
-  // Keys are driven by windowBase (rest state), NOT round(p) — frozen in motion.
   const indices = $derived(
-    Array.from({ length: SLOT_COUNT }, (_, i) => windowBase - SPARE + i),
+    Array.from({ length: keyHi - keyLo + 1 }, (_, i) => keyLo + i),
   )
 
   function easeInOutCubic(t: number): number {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  }
+
+  function wrapQueue(idx: number): number {
+    if (queueTotal <= 0) return Math.max(0, idx)
+    return ((idx % queueTotal) + queueTotal) % queueTotal
+  }
+
+  // Expand the key window to cover [min(from,to)-SPARE, max(from,to)+SPARE]
+  // BEFORE motion starts (create slots before/after motion, never during).
+  function expandKeysFor(from: number, to: number): void {
+    const lo = Math.min(from, to) - SPARE
+    const hi = Math.max(from, to) + SPARE
+    if (lo < keyLo) keyLo = lo
+    if (hi > keyHi) keyHi = hi
+  }
+
+  // Rest transaction: snap keys to windowBase ± SPARE, bind paths if the
+  // fetched window matches, else leave white boards.
+  function settleKeys(base: number): void {
+    windowBase = base
+    keyLo = base - SPARE
+    keyHi = base + SPARE
+    rebind()
+  }
+
+  function rebind(): void {
+    const next: Record<number, string | null> = {}
+    const usable = itemsBase === windowBase && items.length > 0
+    for (const k of indices) {
+      if (!usable) {
+        next[k] = null
+        continue
+      }
+      const j = k - windowBase + MID
+      next[k] = j >= 0 && j < items.length ? items[j].path : null
+    }
+    bindings = next
+  }
+
+  // Data-only: fetch paths for the rest window. Never gates or mutates motion.
+  async function recenter(queueIdx: number, expectBase: number): Promise<void> {
+    if (cancelled) return
+    try {
+      const resp = await fetchQueue(wrapQueue(queueIdx), LIMIT)
+      if (cancelled || resp.images.length === 0) return
+      if (animating || expectBase !== windowBase) return // stale / mid-motion
+      items = resp.images
+      itemsBase = expectBase
+      centerQueueIdx = items[MID].index
+      queueTotal = resp.total
+      rebind()
+    } catch (err: unknown) {
+      console.warn('coverflow recenter failed', err)
+    }
   }
 
   let moveRaf: number | null = null
@@ -65,60 +115,29 @@
   let animating = false
   let cancelled = false
 
-  // Re-derive placeholder → path bindings from the current window.
-  // Called ONLY at rest frames — path knowledge never arrives mid-motion.
-  // A null binding is legal: the white board shows until bytes settle.
-  function rebind(): void {
-    const next: Record<number, string | null> = {}
-    for (const k of indices) {
-      const j = k - windowBase + MID
-      next[k] = j >= 0 && j < items.length ? items[j].path : null
-    }
-    bindings = next
-  }
-
-  // Rest transaction: fetch new window, then swap state atomically
-  // (items / windowBase / bindings) and kick the loader. Never during motion.
-  async function recenter(queueIdx: number): Promise<void> {
-    if (cancelled) return
-    try {
-      const resp = await fetchQueue(queueIdx, LIMIT)
-      if (cancelled || resp.images.length === 0) return
-      if (animating) {
-        // purity: DOM/index state swaps only happen at rest — retry shortly
-        retryTimer = setTimeout(() => {
-          void recenter(queueIdx)
-        }, 100)
-        return
-      }
-      items = resp.images
-      windowBase = Math.round(p) // p is integer at rest
-      centerQueueIdx = items[MID].index
-      rebind()
-      const paths = items.map((i) => i.path)
-      loader.prune(new Set(paths))
-      loader.warm(paths)
-    } catch (err: unknown) {
-      console.warn('coverflow recenter failed', err)
-    }
-  }
-
-  function animateTo(to: number, after?: () => void): void {
+  function animateTo(to: number, queueDelta?: number): void {
     if (cancelled || animating) return
     clearTimeout(loopTimer)
-    const from = p
-    const finish = (): void => {
-      p = to
-      animating = false
-      after?.() // rest transaction (recenter etc.)
-      if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
-    }
+    const from = windowBase // rest anchor — integer
     if (from === to) {
-      finish()
+      settleKeys(to)
+      scheduleAuto()
       return
     }
+    expandKeysFor(from, to) // create any far-side placeholders BEFORE motion
+    const targetQueue =
+      queueDelta === undefined ? null : wrapQueue(centerQueueIdx + queueDelta)
     const t0 = performance.now()
     animating = true
+    const finish = (): void => {
+      p = to
+      settleKeys(to) // motion-owned: always re-base keys at rest
+      animating = false
+      if (targetQueue !== null && !cancelled) {
+        void recenter(targetQueue, to)
+      }
+      scheduleAuto()
+    }
     const frame = (now: number): void => {
       if (cancelled) return
       const t = Math.min(1, (now - t0) / MOVE_MS)
@@ -129,27 +148,26 @@
     moveRaf = requestAnimationFrame(frame)
   }
 
+  function scheduleAuto(): void {
+    if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
+  }
+
   function startMove(): void {
     if (cancelled || animating || status !== 'ready') return
-    // Motion is index-driven: NEVER gated on image readiness or bindings.
-    animateTo(windowBase + 1, () => {
-      void recenter(centerQueueIdx + 1)
-    })
+    // Pure index: never gated on data or images.
+    animateTo(windowBase + 1, 1)
   }
 
   function onSlotClick(k: number): void {
     if (cancelled || animating || status !== 'ready') return
     if (k === windowBase) {
       const path = bindings[k]
-      if (path === null) return // white placeholder — nothing to open
+      if (path === null) return
       const { dir, file } = splitMediaPath(path)
       window.open(new URL(mediaHref(dir, file), location.href).href, '_blank')
       return
     }
-    const delta = k - windowBase // capture at rest
-    animateTo(k, () => {
-      void recenter(centerQueueIdx + delta)
-    })
+    animateTo(k, k - windowBase)
   }
 
   async function bootstrap(): Promise<void> {
@@ -162,12 +180,13 @@
         if (cancelled) return
         if (resp.images.length > 0) {
           items = resp.images
-          windowBase = Math.round(p)
+          queueTotal = resp.total
+          settleKeys(Math.round(p))
+          itemsBase = windowBase
           centerQueueIdx = items[MID].index
-          status = 'ready'
           rebind()
-          loader.warm(items.map((i) => i.path))
-          loopTimer = setTimeout(startMove, PAUSE_MS)
+          status = 'ready'
+          scheduleAuto()
           return
         }
         if (resp.done) {
@@ -223,7 +242,6 @@
       clearTimeout(loopTimer)
       clearTimeout(retryTimer)
       if (moveRaf !== null) cancelAnimationFrame(moveRaf)
-      loader.dispose()
     }
   })
 </script>
@@ -270,27 +288,17 @@
             style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
             onclick={() => onSlotClick(k)}
           >
-            <!-- white board: visible until the bound image decodes (or forever
-                 if path is null — motion must never wait on bytes) -->
+            <!-- white placeholder: no image loading — motion never waits on bytes -->
             <div
               class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+              data-testid="cover-ph"
             >
-              {#if path !== null}
-                {#key path}
-                  <img
-                    src={fileUrl('', path)}
-                    alt=""
-                    class="cf-photo block h-full w-full object-cover"
-                    data-testid="cover-img"
-                    onload={(e) => {
-                      e.currentTarget.classList.add('is-loaded')
-                    }}
-                    onerror={(e) => {
-                      e.currentTarget.classList.add('is-loaded')
-                    }}
-                  />
-                {/key}
-              {/if}
+              <div
+                class="flex h-full w-full items-center justify-center rounded bg-base-200/40 text-sm text-base-content/40"
+                data-k-label={k}
+              >
+                {k}
+              </div>
             </div>
             {#if segs.length > 0}
               <span

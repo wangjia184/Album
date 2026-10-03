@@ -20,11 +20,13 @@ pub struct QueueItem {
     pub path: String,
 }
 
-/// A window of the queue: `limit` items (wrap-inside) plus the scan `done` flag.
+/// A window of the queue: `limit` items (wrap-inside) plus the scan `done`
+/// flag and the full queue length (clients wrap display↔queue indices).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueWindow {
     pub items: Vec<QueueItem>,
     pub done: bool,
+    pub total: usize,
 }
 
 impl ImageQueue {
@@ -71,6 +73,7 @@ impl ImageQueue {
             return QueueWindow {
                 items: Vec::new(),
                 done,
+                total: 0,
             };
         }
         let len64 = len as u64;
@@ -90,7 +93,11 @@ impl ImageQueue {
                 }
             })
             .collect();
-        QueueWindow { items, done }
+        QueueWindow {
+            items,
+            done,
+            total: len,
+        }
     }
 
     /// Spin until the collector marks the scan finished (test seam; 10s cap).

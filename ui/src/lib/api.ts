@@ -90,6 +90,8 @@ export interface QueueItem {
 export interface QueueResponse {
   images: QueueItem[]
   done: boolean
+  /** Full queue length — wrap display↔queue indices with this (0 = empty). */
+  total: number
 }
 
 export async function fetchQueue(
@@ -98,7 +100,7 @@ export async function fetchQueue(
   center = true,
 ): Promise<QueueResponse> {
   const url = `/api/fs/queue?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}&center=${center}`
-  const body = (await fetchJson(url)) as { images?: unknown; done?: unknown }
+  const body = (await fetchJson(url)) as { images?: unknown; done?: unknown; total?: unknown }
   const images = Array.isArray(body.images)
     ? body.images.filter(
         (item): item is QueueItem =>
@@ -109,7 +111,8 @@ export async function fetchQueue(
       )
     : []
   const done = typeof body.done === 'boolean' ? body.done : false
-  return { images, done }
+  const total = typeof body.total === 'number' ? body.total : 0
+  return { images, done, total }
 }
 
 export function fileUrl(rel: string, name: string): string {

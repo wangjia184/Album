@@ -66,6 +66,7 @@ async fn queue_forward_window_indices() {
     let items = images_of(&json);
     assert_eq!(items, vec![(1, "b".to_string()), (2, "c".to_string())]);
     assert_eq!(json["done"], true);
+    assert_eq!(json["total"], 4);
     assert!(json.get("nextOffset").is_none(), "nextOffset must be gone");
 }
 
@@ -106,6 +107,7 @@ async fn queue_empty_ok_no_modulo_zero() {
     let json = body_json(get(&app, "/api/fs/queue?offset=99&limit=12&center=true").await).await;
     assert_eq!(json["images"].as_array().unwrap().len(), 0);
     assert_eq!(json["done"], true);
+    assert_eq!(json["total"], 0);
 }
 
 #[tokio::test]
