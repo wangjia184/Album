@@ -5,11 +5,11 @@
 
 <div class="navbar bg-primary text-primary-content">
   <div class="flex-1 px-2">
-    <a class="text-xl font-bold" href="#/">Album</a>
+    <a class="text-xl font-bold" href="#/album">Album</a>
   </div>
   <div class="flex-none">
     <ul class="menu menu-horizontal px-1">
-      <li><a href="#/">Home</a></li>
+      <li><a href="#/album">相册</a></li>
     </ul>
   </div>
 </div>
