@@ -26,9 +26,19 @@
   let timer: ReturnType<typeof setInterval> | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
 
+  // Retain prefetch Image refs until settled so an unreferenced pending
+  // load can't be GC-abandoned before it warms the cache.
+  const warmed = new Set<HTMLImageElement>()
+
   function prefetch(): void {
     for (const p of upcoming.slice(0, PREFETCH_AHEAD)) {
       const im = new Image()
+      warmed.add(im)
+      const settle = (): void => {
+        warmed.delete(im)
+      }
+      im.onload = settle
+      im.onerror = settle
       im.src = fileUrl('', p)
     }
   }

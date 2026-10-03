@@ -4,7 +4,7 @@
   let { current, onopen }: { current: string | null; onopen: (path: string) => void } = $props()
 
   const FADE_MS = 800
-  const FX_MS = 1000
+  const FX_MS = 400
   const EFFECTS = ['kenburns', 'flip', 'wipe'] as const
   type FancyFx = (typeof EFFECTS)[number]
   type TransitionKind = FancyFx | 'fade'
