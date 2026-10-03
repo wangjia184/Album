@@ -59,14 +59,16 @@
       modules: [EffectCoverflow],
       effect: 'coverflow',
       initialSlide: initial,
-      slidesPerView: 3,
+      // 1.5 → center slide owns ~2/3 of the row; side slides peek in,
+      // heavily rotated + pushed back so they read as squeezed at the edges.
+      slidesPerView: 1.5,
       centeredSlides: true,
       loop: false,
       grabCursor: true,
       coverflowEffect: {
-        rotate: 50,
+        rotate: 60,
         stretch: 0,
-        depth: 100,
+        depth: 140,
         modifier: 1,
         slideShadows: false,
       },
@@ -74,9 +76,11 @@
         slideChange(s) {
           if (cancelled || !swiperReady) return
           activeIdx = s.activeIndex
-          // Back edge: re-center the window on the SAME photo so the user
-          // can keep swiping; forward edge is advance()'s job.
-          if (activeIdx === 0) void rebuildTo(0)
+          // Either edge: re-center the window on the SAME photo so more
+          // (future or past) queue slots become swipeable.
+          if (activeIdx === 0 || activeIdx === items.length - 1) {
+            void rebuildTo(activeIdx)
+          }
         },
         touchStart() {
           resetIdle()
@@ -221,7 +225,7 @@
           <div class="swiper-slide" data-testid="cover-slide">
             <button
               type="button"
-              class="block h-60 w-full cursor-pointer"
+              class="block h-96 w-full cursor-pointer"
               aria-label={item.path}
               onclick={() => onSlideClick(i)}
             >
