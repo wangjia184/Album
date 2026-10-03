@@ -168,25 +168,18 @@ main:has([aria-modal='true']) {
   }
 }
 
-/* Coverflow slide width must survive swiper.destroy style cleanup and beat
-   swiper.css `.swiper-slide { width: 100% }` (same-specency loss otherwise). */
-.swiper .cover-slide {
-  width: 640px !important;
+/* CoverFlow model (spec: playhead p, slots are pure f(d) of d = k - p).
+   .cf-stage owns the perspective camera; .cf-slot squares are absolutely
+   centered and positioned purely via their inline transform3d. */
+.cf-stage {
+  perspective: 1200px;
+  /* Far slots extend past the viewport on purpose — clip them so the angled
+     row reads as endless (no visible terminus). */
+  overflow: hidden;
 }
-
-/* Coverflow: vertically center fixed-height slides inside the adaptive root,
-   and maximize the ACTIVE photo via a scale that shrinks back on switch. */
-.swiper .swiper-wrapper {
-  align-items: center;
-}
-.cover-slide .cover-btn {
-  transform: scale(1);
-  transition: transform 300ms ease;
+.cf-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   will-change: transform;
-}
-.cover-slide.swiper-slide-active .cover-btn {
-  transform: scale(var(--cover-scale, 1.35));
-}
-.cover-slide.swiper-slide-active {
-  z-index: 2;
 }
