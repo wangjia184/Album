@@ -111,7 +111,7 @@
       <span class="relative flex items-center">
         {#if copied}
           <span
-            class="absolute bottom-full right-1/2 z-10 mb-2 -mr-2 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-base-100 px-2.5 py-1.5 text-sm shadow-lg ring-1 ring-base-300"
+            class="absolute top-full right-1/2 z-10 mt-2 flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-base-100 px-2.5 py-1.5 text-sm shadow-lg ring-1 ring-base-300"
             role="status"
           >
             <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-success-content">
@@ -120,35 +120,38 @@
             Url Copied
           </span>
         {/if}
+        <span class="tooltip tooltip-bottom" data-tip="复制链接">
+          <button
+            type="button"
+            class="btn btn-circle btn-sm btn-ghost"
+            aria-label="复制链接"
+            onclick={copyLink}
+          >
+            <Icon icon="ph:link-simple" class="h-5 w-5" />
+          </button>
+        </span>
+      </span>
+      <span class="tooltip tooltip-bottom" data-tip={infoOpen ? '关闭信息' : '媒体信息'}>
         <button
           type="button"
           class="btn btn-circle btn-sm btn-ghost"
-          aria-label="复制链接"
-          title="复制链接"
-          onclick={copyLink}
+          aria-label={infoOpen ? '关闭信息面板' : '打开信息面板'}
+          aria-pressed={infoOpen}
+          onclick={() => (infoOpen = !infoOpen)}
         >
-          <Icon icon="ph:link-simple" class="h-5 w-5" />
+          <Icon icon="ph:list-bullets" class="h-5 w-5" />
         </button>
       </span>
-      <button
-        type="button"
-        class="btn btn-circle btn-sm btn-ghost"
-        aria-label={infoOpen ? '关闭信息面板' : '打开信息面板'}
-        aria-pressed={infoOpen}
-        title={infoOpen ? '关闭信息' : '媒体信息'}
-        onclick={() => (infoOpen = !infoOpen)}
-      >
-        <Icon icon="ph:camera" class="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        class="btn btn-circle btn-sm btn-ghost"
-        aria-label="关闭"
-        title="关闭"
-        onclick={onclose}
-      >
-        <Icon icon="ph:x" class="h-5 w-5" />
-      </button>
+      <span class="tooltip tooltip-bottom" data-tip="关闭">
+        <button
+          type="button"
+          class="btn btn-circle btn-sm btn-ghost"
+          aria-label="关闭"
+          onclick={onclose}
+        >
+          <Icon icon="ph:x" class="h-5 w-5" />
+        </button>
+      </span>
     </header>
 
     <div class="flex min-h-0 flex-1">
@@ -159,26 +162,28 @@
           <PhotoViewport {url} alt={item.name} />
         {/if}
 
-        <button
-          type="button"
-          class="btn btn-circle btn-sm btn-ghost absolute left-2 top-1/2 -translate-y-1/2"
-          disabled={!canPrev}
-          aria-label="上一张"
-          title="上一张"
-          onclick={() => onnavigate(-1)}
-        >
-          <Icon icon="ph:caret-left" class="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          class="btn btn-circle btn-sm btn-ghost absolute right-2 top-1/2 -translate-y-1/2"
-          disabled={!canNext}
-          aria-label="下一张"
-          title="下一张"
-          onclick={() => onnavigate(1)}
-        >
-          <Icon icon="ph:caret-right" class="h-5 w-5" />
-        </button>
+        <span class="tooltip tooltip-right absolute left-2 top-1/2 -translate-y-1/2">
+          <button
+            type="button"
+            class="btn btn-circle btn-sm btn-ghost"
+            disabled={!canPrev}
+            aria-label="上一张"
+            onclick={() => onnavigate(-1)}
+          >
+            <Icon icon="ph:caret-left" class="h-5 w-5" />
+          </button>
+        </span>
+        <span class="tooltip tooltip-left absolute right-2 top-1/2 -translate-y-1/2">
+          <button
+            type="button"
+            class="btn btn-circle btn-sm btn-ghost"
+            disabled={!canNext}
+            aria-label="下一张"
+            onclick={() => onnavigate(1)}
+          >
+            <Icon icon="ph:caret-right" class="h-5 w-5" />
+          </button>
+        </span>
       </div>
 
       {#if infoOpen}
