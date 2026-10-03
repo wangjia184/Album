@@ -1,27 +1,32 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
+  import { createCoverLoader } from '../lib/coverLoader'
   import { applyPreset, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
   import { mediaHref, toSegments } from '../lib/path'
 
-  // View layer only: animation loop, stage pinning, queue window, rendering.
-  // Slot geometry: lib/coverflow.ts (pure slotTransform(d, S), ratio-based,
-  // fine-grid collision-free presets). Photos fill slots via object-fit:cover
-  // (short edge scales to the slot side, other axis center-cropped) so every
-  // cover is exactly S×S regardless of source aspect ratio.
+  // ── Two strictly separated layers ──────────────────────────────────────
+  //
+  // Motion layer (pure index): given the rest anchor `windowBase`, every
+  // slot key is `windowBase ± SPARE` and geometry is slotTransform(k − p).
+  // Knowing one index implies all others — no data, no image, no fetch is
+  // required to drive or complete a glide. Keys freeze for the whole
+  // animation; only `p` changes (transform writes only).
+  //
+  // Data/loader layer: at rest frames only, a queue window is fetched and
+  // index → path bindings are swapped in atomically. The loader then warms
+  // those paths off to the side (future: Web Worker). A missing/slow image
+  // leaves the white placeholder board visible — never blocks motion.
   applyPreset('tightSeam')
 
-  const M = 3 // slots each side → 2M+1 = 7
-  const SLOT_COUNT = 2 * M + 1 // visible slots (keys round(p)±3) — always 7
-  const LIMIT = 2 * M + 3 // fetch 9 — one spare each side beyond the visible
-                          // slots: during the 2nd half of a move the window
-                          // keys shift +1 and the new edge slot needs its photo
-                          // BEFORE the end-of-move recenter (no pop-in at rest)
-  const MID = M + 1 // = 4: center index inside a center=true window of 9
-                    // (server: floor((9-1)/2) = 4)
+  const SPARE = 4 // one spare slot each side beyond the ±3 visible range:
+                  // absorbs the ±1 key shift so key re-basing happens at rest
+  const SLOT_COUNT = 2 * SPARE + 1 // 9 placeholders (outer pair clips offscreen)
+  const LIMIT = SLOT_COUNT // fetch window = placeholder set
+  const MID = SPARE // center index inside a center=true window (=4)
   const MOVE_MS = 950
-  const PAUSE_MS = 4050 // pause; MOVE+PAUSE = 5s cycle
+  const PAUSE_MS = 4050 // MOVE + PAUSE = 5s cycle
   const MAX_EMPTY_RETRIES = 30
 
   type Status = 'loading' | 'ready' | 'empty' | 'error'
@@ -29,14 +34,13 @@
   let p = $state(0) // playhead — the ONE animated state
   let status = $state<Status>('loading')
   let error = $state('')
-  let items = $state<QueueItem[]>([])
-  // Paths whose <img> has fired load/error → eligible for the fade-in class.
-  let loaded = $state<string[]>([])
-  // Stable mapping anchor: item index = k - anchorK + MID. Captured at fetch
-  // time so images never swap mid-move (anchor only re-bases after a
-  // completed move/click recenter, when geometry is at rest).
-  let anchorK = 0
-  let centerQueueIdx = 0 // normalized queue index of the item at slot MID
+  let items = $state<QueueItem[]>([]) // latest fetched window (position → path)
+  let windowBase = $state(0) // integer anchor: keys = windowBase ± SPARE.
+                             // Frozen during motion; re-based only at rest.
+  let centerQueueIdx = 0 // queue index of items[MID]
+  // index → path, swapped only at rest. null = white board (no data yet).
+  let bindings = $state<Record<number, string | null>>({})
+  const loader = createCoverLoader()
 
   const SLOT_MIN = 240
   const SLOT_MAX = 660
@@ -46,35 +50,10 @@
     Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40, stageW - 80)),
   )
 
+  // Keys are driven by windowBase (rest state), NOT round(p) — frozen in motion.
   const indices = $derived(
-    Array.from({ length: SLOT_COUNT }, (_, i) => Math.round(p) - M + i),
+    Array.from({ length: SLOT_COUNT }, (_, i) => windowBase - SPARE + i),
   )
-
-  function itemFor(k: number): QueueItem | null {
-    const j = k - anchorK + MID
-    return j >= 0 && j < items.length ? items[j] : null
-  }
-
-  function markLoaded(item: QueueItem): void {
-    if (!loaded.includes(item.path)) loaded = [...loaded, item.path]
-  }
-
-  // Warm every photo in the 9-window so the mid-move key-shift insertion
-  // (new edge slot at p crossing .5) hits cache — no network/decode during
-  // the animation.
-  const warmed = new Set<HTMLImageElement>()
-  function prefetchWindow(): void {
-    for (const item of items) {
-      const im = new Image()
-      warmed.add(im)
-      const settle = (): void => {
-        warmed.delete(im)
-      }
-      im.onload = settle
-      im.onerror = settle
-      im.src = fileUrl('', item.path)
-    }
-  }
 
   function easeInOutCubic(t: number): number {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -86,15 +65,39 @@
   let animating = false
   let cancelled = false
 
+  // Re-derive placeholder → path bindings from the current window.
+  // Called ONLY at rest frames — path knowledge never arrives mid-motion.
+  // A null binding is legal: the white board shows until bytes settle.
+  function rebind(): void {
+    const next: Record<number, string | null> = {}
+    for (const k of indices) {
+      const j = k - windowBase + MID
+      next[k] = j >= 0 && j < items.length ? items[j].path : null
+    }
+    bindings = next
+  }
+
+  // Rest transaction: fetch new window, then swap state atomically
+  // (items / windowBase / bindings) and kick the loader. Never during motion.
   async function recenter(queueIdx: number): Promise<void> {
     if (cancelled) return
     try {
       const resp = await fetchQueue(queueIdx, LIMIT)
       if (cancelled || resp.images.length === 0) return
+      if (animating) {
+        // purity: DOM/index state swaps only happen at rest — retry shortly
+        retryTimer = setTimeout(() => {
+          void recenter(queueIdx)
+        }, 100)
+        return
+      }
       items = resp.images
-      centerQueueIdx = items[MID].index // normalized truth from the server
-      anchorK = Math.round(p)
-      prefetchWindow()
+      windowBase = Math.round(p) // p is integer at rest
+      centerQueueIdx = items[MID].index
+      rebind()
+      const paths = items.map((i) => i.path)
+      loader.prune(new Set(paths))
+      loader.warm(paths)
     } catch (err: unknown) {
       console.warn('coverflow recenter failed', err)
     }
@@ -107,7 +110,7 @@
     const finish = (): void => {
       p = to
       animating = false
-      after?.()
+      after?.() // rest transaction (recenter etc.)
       if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
     }
     if (from === to) {
@@ -128,23 +131,22 @@
 
   function startMove(): void {
     if (cancelled || animating || status !== 'ready') return
-    animateTo(Math.round(p) + 1, () => {
+    // Motion is index-driven: NEVER gated on image readiness or bindings.
+    animateTo(windowBase + 1, () => {
       void recenter(centerQueueIdx + 1)
     })
   }
 
   function onSlotClick(k: number): void {
     if (cancelled || animating || status !== 'ready') return
-    const item = itemFor(k)
-    if (item === null) return
-    if (k === Math.round(p)) {
-      const { dir, file } = splitMediaPath(item.path)
-      // open the album lightbox in a new tab (click is a user gesture —
-      // window.open won't be popup-blocked)
+    if (k === windowBase) {
+      const path = bindings[k]
+      if (path === null) return // white placeholder — nothing to open
+      const { dir, file } = splitMediaPath(path)
       window.open(new URL(mediaHref(dir, file), location.href).href, '_blank')
       return
     }
-    const delta = k - Math.round(p) // capture BEFORE the move
+    const delta = k - windowBase // capture at rest
     animateTo(k, () => {
       void recenter(centerQueueIdx + delta)
     })
@@ -160,11 +162,12 @@
         if (cancelled) return
         if (resp.images.length > 0) {
           items = resp.images
-          anchorK = Math.round(p) // 0
+          windowBase = Math.round(p)
           centerQueueIdx = items[MID].index
           status = 'ready'
-          prefetchWindow()
-          if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
+          rebind()
+          loader.warm(items.map((i) => i.path))
+          loopTimer = setTimeout(startMove, PAUSE_MS)
           return
         }
         if (resp.done) {
@@ -189,9 +192,8 @@
     }
   }
 
-  // Pin the CLIP box to the VISUAL viewport (fixed escapes main's container
-  // max-width/overflow); clip owns overflow:hidden + perspective; inner stage
-  // owns preserve-3d (overflow on a preserve-3d element forces flattening).
+  // Pin the CLIP box to the VISUAL viewport (fixed escapes main's container);
+  // clip owns overflow:hidden + perspective; stage owns preserve-3d.
   function pinStage(): void {
     if (stageEl === null) return
     const clip = stageEl.parentElement
@@ -206,6 +208,10 @@
 
   let stageEl = $state<HTMLDivElement | null>(null)
 
+  function parentSegsOf(path: string | null): string[] {
+    return path === null ? [] : toSegments(splitMediaPath(path).dir)
+  }
+
   onMount(() => {
     pinStage()
     const onResize = (): void => pinStage()
@@ -217,6 +223,7 @@
       clearTimeout(loopTimer)
       clearTimeout(retryTimer)
       if (moveRaf !== null) cancelAnimationFrame(moveRaf)
+      loader.dispose()
     }
   })
 </script>
@@ -246,9 +253,8 @@
         {#each indices as k (k)}
           {@const d = k - p}
           {@const t = slotTransform(d, S)}
-          {@const item = itemFor(k)}
-          {@const parentSegs =
-            item !== null ? toSegments(splitMediaPath(item.path).dir) : []}
+          {@const path = bindings[k] ?? null}
+          {@const segs = parentSegsOf(path)}
           <button
             type="button"
             class="cf-slot cursor-pointer"
@@ -256,7 +262,7 @@
             data-d={d}
             data-k={k}
             data-theta={t.theta}
-            aria-label={item !== null ? item.path : ''}
+            aria-label={path ?? ''}
             style:width="{S}px"
             style:height="{S}px"
             style:margin-left="{-S / 2}px"
@@ -264,27 +270,34 @@
             style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
             onclick={() => onSlotClick(k)}
           >
+            <!-- white board: visible until the bound image decodes (or forever
+                 if path is null — motion must never wait on bytes) -->
             <div
               class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
             >
-              {#if item !== null}
-              <img
-                src={fileUrl('', item.path)}
-                alt=""
-                class="cf-photo block h-full w-full object-cover"
-                class:is-loaded={loaded.includes(item.path)}
-                data-testid="cover-img"
-                onload={() => item !== null && markLoaded(item)}
-                onerror={() => item !== null && markLoaded(item)}
-              />
+              {#if path !== null}
+                {#key path}
+                  <img
+                    src={fileUrl('', path)}
+                    alt=""
+                    class="cf-photo block h-full w-full object-cover"
+                    data-testid="cover-img"
+                    onload={(e) => {
+                      e.currentTarget.classList.add('is-loaded')
+                    }}
+                    onerror={(e) => {
+                      e.currentTarget.classList.add('is-loaded')
+                    }}
+                  />
+                {/key}
               {/if}
             </div>
-            {#if parentSegs.length > 0}
+            {#if segs.length > 0}
               <span
                 class="badge badge-sm absolute bottom-2 left-2 z-20 ml-2 mb-2 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
                 data-testid="cover-parent"
               >
-                <span class="block truncate whitespace-nowrap">{parentSegs.join(' › ')}</span>
+                <span class="block truncate whitespace-nowrap">{segs.join(' › ')}</span>
               </span>
             {/if}
           </button>
