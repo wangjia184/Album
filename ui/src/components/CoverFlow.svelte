@@ -4,7 +4,7 @@
   import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
   import { applyPreset, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
-  import { mediaHref } from '../lib/path'
+  import { mediaHref, toSegments } from '../lib/path'
 
   // View layer only: animation loop, stage pinning, queue window, rendering.
   // Slot geometry: lib/coverflow.ts (pure slotTransform(d, S), ratio-based,
@@ -216,9 +216,11 @@
           {@const d = k - p}
           {@const t = slotTransform(d, S)}
           {@const item = itemFor(k)}
+          {@const parentSegs =
+            item !== null ? toSegments(splitMediaPath(item.path).dir) : []}
           <button
             type="button"
-            class="cf-slot cursor-pointer overflow-hidden rounded-lg"
+            class="cf-slot cursor-pointer"
             data-cf-slot
             data-d={d}
             data-k={k}
@@ -231,13 +233,25 @@
             style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
             onclick={() => onSlotClick(k)}
           >
-            {#if item !== null}
-              <img
-                src={fileUrl('', item.path)}
-                alt=""
-                class="block h-full w-full object-cover"
-                data-testid="cover-img"
-              />
+            <div
+              class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+            >
+              {#if item !== null}
+                <img
+                  src={fileUrl('', item.path)}
+                  alt=""
+                  class="block h-full w-full object-cover"
+                  data-testid="cover-img"
+                />
+              {/if}
+            </div>
+            {#if parentSegs.length > 0}
+              <span
+                class="badge badge-sm absolute bottom-2 left-2 z-20 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
+                data-testid="cover-parent"
+              >
+                <span class="block truncate whitespace-nowrap">{parentSegs.join(' › ')}</span>
+              </span>
             {/if}
           </button>
         {/each}
