@@ -67,12 +67,16 @@
 
   let stageEl = $state<HTMLDivElement | null>(null)
 
-  // Pin the stage to the VISUAL viewport: 100vw includes classic scrollbars
-  // (15px asymmetry), so set width/offset from measured layout instead.
+  // Pin the stage to the VISUAL viewport: fixed positioning escapes main's
+  // container max-width + overflow-x clip (wings must clip at the PAGE edge,
+  // not the container edge). Top/height fill the space below the navbar.
   function pinStage(): void {
     if (stageEl === null) return
-    const parentLeft = stageEl.parentElement?.getBoundingClientRect().left ?? 0
-    stageEl.style.marginLeft = `${-parentLeft}px`
+    const main = document.querySelector('main')
+    const mr = main?.getBoundingClientRect()
+    const top = Math.round((mr?.top ?? 73) + 16)
+    stageEl.style.top = `${top}px`
+    stageEl.style.height = `${Math.max(320, window.innerHeight - top - 16)}px`
     stageEl.style.width = `${document.documentElement.clientWidth}px`
   }
 
@@ -80,16 +84,7 @@
     pinStage()
     const onResize = (): void => pinStage()
     window.addEventListener('resize', onResize)
-    // Parent geometry can settle after mount (scrollbar/fonts) — re-pin.
-    let po: ResizeObserver | null = null
-    if (stageEl !== null && stageEl.parentElement !== null) {
-      po = new ResizeObserver(() => pinStage())
-      po.observe(stageEl.parentElement)
-    }
-    return () => {
-      window.removeEventListener('resize', onResize)
-      po?.disconnect()
-    }
+    return () => window.removeEventListener('resize', onResize)
   })
 </script>
 
@@ -98,7 +93,7 @@
   data-testid="coverflow"
 >
   <div
-    class="cf-stage relative min-h-0 w-full flex-1"
+    class="cf-stage fixed left-0"
     bind:this={stageEl}
     bind:clientHeight={stageH}
     bind:clientWidth={stageW}
