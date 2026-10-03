@@ -26,11 +26,13 @@
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
   const SLOT_MIN = 240
-  const SLOT_MAX = 560 // center maximize = adapt S to the stage, NOT scale(d):
-                       // scaling the center square would break edge docking.
+  const SLOT_MAX = 660 // square side cap; also bounded by stage width - 80
 
   let stageH = $state(0)
-  const S = $derived(Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40)))
+  let stageW = $state(0)
+  const S = $derived(
+    Math.max(SLOT_MIN, Math.min(SLOT_MAX, stageH - 40, stageW - 80)),
+  )
 
   interface SlotXf {
     theta: number // deg, = +phi (radial/normal alignment)
@@ -96,9 +98,10 @@
   data-testid="coverflow"
 >
   <div
-    class="cf-stage relative h-[min(600px,calc(100dvh-14rem))]"
+    class="cf-stage relative min-h-0 w-full flex-1"
     bind:this={stageEl}
     bind:clientHeight={stageH}
+    bind:clientWidth={stageW}
     data-testid="cover-stage"
   >
     {#each indices as k (k)}

@@ -23,7 +23,7 @@
 </script>
 
 <section class="relative flex min-h-0 flex-1 flex-col gap-3">
-  <div class="join absolute right-0 top-0 z-10">
+  <div class="join absolute right-2 top-2 z-20 rounded-lg bg-base-100/60 p-1 backdrop-blur">
     <a href="#/" class="join-item btn btn-xs {isCover ? '' : 'btn-active'}">横条</a>
     <a
       href="#/?mode=cover"
