@@ -14,6 +14,9 @@
   //                                  (both dock equations collapse to this R)
   const DELTA = 28 // deg per slot — 3*DELTA=84 < 90 (no face-flip), pulls
                    // wings into the depth so d2/d3 stay on screen at 1280px
+  const STACK = 0.72 // pull wing positions inward along the arc so each
+                     // successive cover OCCLUDES part of the previous one
+                     // (orientation untouched; flat-layer z-index paints order)
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   const P = 0 // playhead: static settled state (integer). Animation comes later.
 
@@ -34,7 +37,7 @@
   function f(d: number, side: number): SlotXf {
     const rad = (deg: number): number => (deg * Math.PI) / 180
     const phi = rad(d * DELTA)
-    const R = side / 2 / Math.tan(rad(DELTA) / 2)
+    const R = side / 2 / Math.tan(rad(DELTA) / 2) * STACK
     return {
       theta: d * DELTA,
       tx: R * Math.sin(phi),
@@ -102,6 +105,7 @@
         style:height="{S}px"
         style:margin-left="{-S / 2}px"
         style:margin-top="{-S / 2}px"
+        style:z-index={d === 0 ? 10 : Math.abs(d)}
         style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
       >
         <!-- three registration points: center, left-edge mid, right-edge mid -->
