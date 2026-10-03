@@ -40,14 +40,14 @@
       class="join-item btn btn-xs {mode === 'strip' ? 'btn-active' : ''}"
       onclick={() => {
         manual = 'strip'
-      }}>横条</button
+      }}>画框</button
     >
     <button
       type="button"
       class="join-item btn btn-xs {mode === 'cover' ? 'btn-active' : ''}"
       onclick={() => {
         manual = 'cover'
-      }}>Cover</button
+      }}>封面</button
     >
   </div>
   {#if mode === 'cover'}
