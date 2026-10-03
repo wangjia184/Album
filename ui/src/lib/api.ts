@@ -82,6 +82,23 @@ export async function fetchDirThumbs(folderRel: string, n = 3): Promise<string[]
   return body.images.filter((image): image is string => typeof image === 'string')
 }
 
+export interface QueueResponse {
+  images: string[]
+  nextOffset: number
+  done: boolean
+}
+
+export async function fetchQueue(offset: number, limit: number): Promise<QueueResponse> {
+  const url = `/api/fs/queue?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}`
+  const body = (await fetchJson(url)) as { images?: unknown; nextOffset?: unknown; done?: unknown }
+  const images = Array.isArray(body.images)
+    ? body.images.filter((image): image is string => typeof image === 'string')
+    : []
+  const nextOffset = typeof body.nextOffset === 'number' ? body.nextOffset : 0
+  const done = typeof body.done === 'boolean' ? body.done : false
+  return { images, nextOffset, done }
+}
+
 export function fileUrl(rel: string, name: string): string {
   const parts = [
     ...rel.split('/').filter((segment) => segment.length > 0),
