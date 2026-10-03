@@ -167,3 +167,9 @@ main:has([aria-modal='true']) {
     animation-duration: 1ms;
   }
 }
+
+/* Coverflow slide width must survive swiper.destroy style cleanup and beat
+   swiper.css `.swiper-slide { width: 100% }` (same-specency loss otherwise). */
+.swiper .cover-slide {
+  width: 640px !important;
+}

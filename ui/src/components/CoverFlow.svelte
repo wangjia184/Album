@@ -53,7 +53,7 @@
   function initSwiper(initial: number): void {
     if (rootEl === null || cancelled) return
     swiperReady = false
-    swiper?.destroy(true)
+    swiper?.destroy(true, false)
     swiper = null
     swiper = new Swiper(rootEl, {
       modules: [EffectCoverflow],
@@ -203,7 +203,7 @@
       document.removeEventListener('click', onActivity)
       clearTimeout(idleTimer)
       clearTimeout(retryTimer)
-      swiper?.destroy(true)
+      swiper?.destroy(true, false)
       swiper = null
     }
   })
@@ -225,8 +225,10 @@
     <div class="swiper w-full" bind:this={rootEl} data-testid="coverflow-swiper">
       <div class="swiper-wrapper">
         {#each items as item, i (i)}
-          <!-- inline width: swiper.css `.swiper-slide{width:100%}` out-cascades Tailwind's w-[640px] -->
-          <div class="swiper-slide" style="width: 640px" data-testid="cover-slide">
+          <!-- width pinned via `.swiper .cover-slide` !important rule in app.css:
+               inline style gets stripped by swiper.destroy's style cleanup and
+               swiper.css `.swiper-slide{width:100%}` would otherwise win. -->
+          <div class="swiper-slide cover-slide" data-testid="cover-slide">
             <button
               type="button"
               class="block h-96 w-full cursor-pointer"
