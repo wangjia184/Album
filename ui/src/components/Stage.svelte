@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fileUrl } from '../lib/api'
   import { splitMediaPath } from '../lib/pipeline'
-  import Breadcrumb from './Breadcrumb.svelte'
+  import { toSegments } from '../lib/path'
 
   let { current, onopen }: { current: string | null; onopen: (path: string) => void } = $props()
 
@@ -20,7 +20,9 @@
   let lastTransition = $state<TransitionKind | ''>('')
   let seq = 0
 
-  const parentDir = $derived(shownPath === null ? '' : splitMediaPath(shownPath).dir)
+  const parentSegs = $derived(
+    shownPath === null ? [] : toSegments(splitMediaPath(shownPath).dir),
+  )
 
   function arSame(a: { w: number; h: number }, b: { w: number; h: number }): boolean {
     const r1 = a.w / a.h
@@ -133,12 +135,12 @@
           aria-label="打开这张照片"
           onclick={openCurrent}
         ></button>
-        {#if parentDir !== ''}
+        {#if parentSegs.length > 0}
           <div
             class="badge badge-sm absolute bottom-2 left-2 z-20 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
             data-testid="stage-parent"
           >
-            <Breadcrumb path={parentDir} rootName="" />
+            <span class="block truncate whitespace-nowrap">{parentSegs.join(' › ')}</span>
           </div>
         {/if}
       </div>
