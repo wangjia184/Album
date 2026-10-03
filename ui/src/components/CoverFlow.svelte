@@ -23,7 +23,15 @@
                      // straight-line pitch)
   const THETA_CAP = 60 // deg safety — projection fold-back guard (unused at 38)
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
-  const P = 0 // playhead: static settled state (integer). Animation comes later.
+  // Playhead: the ONE animated state. Everything on screen is f(k - p).
+  // Basic motion: ease p from n to n+1, rest, repeat. Drag/queue later.
+  let p = $state(0)
+  const MOVE_MS = 700
+  const PAUSE_MS = 1800
+
+  function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  }
 
   const SLOT_MIN = 240
   const SLOT_MAX = 660 // square side cap; also bounded by stage width - 80
@@ -59,8 +67,38 @@
   }
 
   const indices = $derived(
-    Array.from({ length: 2 * M + 1 }, (_, i) => i - M),
+    // Virtual slots follow the playhead: k = round(p) + i. At the mid-point
+    // of a move the window shifts by one — only the two edge slivers
+    // (|d| ≈ 3.5, clipped) are recycled; interior slots keep their k, so
+    // their f(k-p) stays continuous through the hand-off.
+    Array.from({ length: 2 * M + 1 }, (_, i) => Math.round(p) - M + i),
   )
+
+  let moveRaf: number | null = null
+  let loopTimer: ReturnType<typeof setTimeout> | undefined
+  let animating = false
+  let cancelled = false
+
+  function startMove(): void {
+    if (cancelled) return
+    const from = Math.round(p)
+    const to = from + 1
+    const t0 = performance.now()
+    animating = true
+    const frame = (now: number): void => {
+      if (cancelled) return
+      const t = Math.min(1, (now - t0) / MOVE_MS)
+      p = from + (to - from) * easeInOutCubic(t) // the only moving number
+      if (t < 1) {
+        moveRaf = requestAnimationFrame(frame)
+      } else {
+        p = to
+        animating = false
+        loopTimer = setTimeout(startMove, PAUSE_MS)
+      }
+    }
+    moveRaf = requestAnimationFrame(frame)
+  }
 
   // Stable pseudo-random hue per slot (golden angle) — slots stay
   // distinguishable across re-renders without any randomness state.
@@ -92,7 +130,14 @@
     pinStage()
     const onResize = (): void => pinStage()
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    // start the move loop after the initial rest
+    loopTimer = setTimeout(startMove, PAUSE_MS)
+    return () => {
+      cancelled = true
+      window.removeEventListener('resize', onResize)
+      clearTimeout(loopTimer)
+      if (moveRaf !== null) cancelAnimationFrame(moveRaf)
+    }
   })
 </script>
 
@@ -109,7 +154,7 @@
       data-testid="cover-stage"
     >
     {#each indices as k (k)}
-      {@const d = k - P}
+      {@const d = k - p}
       {@const t = f(d, S)}
       <div
         class="cf-slot rounded-lg border border-base-100/40"
