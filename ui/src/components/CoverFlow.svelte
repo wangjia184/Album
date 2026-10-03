@@ -209,7 +209,10 @@
   })
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3" data-testid="coverflow">
+<div
+  class="ml-[calc(50%-50vw)] flex min-h-0 w-screen max-w-none flex-1 flex-col items-center justify-center gap-3"
+  data-testid="coverflow"
+>
   {#if status === 'loading'}
     <span class="loading loading-dots"></span>
   {:else if status === 'empty'}
@@ -219,7 +222,7 @@
       <span>照片列表加载失败：{error}</span>
     </div>
   {:else if status === 'ready'}
-    <div class="swiper w-full max-w-4xl" bind:this={rootEl} data-testid="coverflow-swiper">
+    <div class="swiper w-full" bind:this={rootEl} data-testid="coverflow-swiper">
       <div class="swiper-wrapper">
         {#each items as item, i (i)}
           <div class="swiper-slide" data-testid="cover-slide">
