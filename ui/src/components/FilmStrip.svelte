@@ -5,7 +5,7 @@
 
   let { oncurrent }: { oncurrent: (path: string) => void } = $props()
 
-  const TICK_MS = 10_000
+  const TICK_MS = 5_000
   const PREFETCH_AHEAD = 16
   const MAX_EMPTY_RETRIES = 60
 
