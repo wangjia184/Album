@@ -22,7 +22,12 @@
   const GAP_C = 1.0  // center-adjacent lane pitch ×S — collision-free per
                      // point-in-both-quads oracle (live arc was 4 collisions);
                      // gives the center card ~200px more breathing room in motion
-  const GAP_W = 0.5  // wing lane pitch ×S — 124px parallel-safe overlap (tight)
+  const GAP_W = 0.5 // wing lane pitch ×S — 190px parent overlap (visible cover after perspective)
+  const PROX_MAX = 220 // px: resting center bulges toward the camera at d=0
+                       // (perspective renders it ~16% larger); decays via
+                       // cos²(πd/2) to 0 by |d|=1 — the first thing a leaving
+                       // card does is retreat+shrink, as a pure f(d) animation.
+                       // z-forward only ⇒ never reduces wing clearance.
   const THETA_CAP = 60 // deg safety — projection fold-back guard (unused at 38)
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   // Playhead: the ONE animated state. Everything on screen is f(k - p).
@@ -71,10 +76,14 @@
     // would teleport cards 200+px in one frame mid-animation.
     const backFull = (side / 2) * Math.sin(rad(WING_ANGLE)) + 24
     const back = backFull * Math.min(Math.abs(d), 1)
+    // Proximity bulge: smooth tent peaked at d=0, zero slope at the peak,
+    // exactly 0 for |d| ≥ 1 (cos goes negative → max with 0).
+    const prox =
+      PROX_MAX * Math.pow(Math.max(0, Math.cos((Math.PI * Math.abs(d)) / 2)), 2)
     return {
       theta,
       tx,
-      tz: -R * (1 - Math.cos(phi)) - back,
+      tz: -R * (1 - Math.cos(phi)) - back + prox,
       phiDeg: d * POS_DELTA,
     }
   }
