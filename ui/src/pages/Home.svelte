@@ -11,8 +11,8 @@
 <section class="flex flex-col gap-4">
   <div class="card bg-base-200">
     <div class="card-body">
-      <h1 class="card-title">随机轮播（占位）</h1>
-      <p class="text-sm opacity-70">精选照片自动轮播，后续接入真实媒体。</p>
+      <h1 class="card-title text-2xl">朝花夕拾</h1>
+      <p class="text-sm opacity-70">随机轮播（占位）——精选照片自动轮播，后续接入真实媒体。</p>
     </div>
   </div>
 
