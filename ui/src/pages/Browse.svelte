@@ -1,9 +1,9 @@
 <script lang="ts">
   import { listDir, type ListResponse } from '../lib/api'
+  import { normalizePath } from '../lib/path'
   import Breadcrumb from '../components/Breadcrumb.svelte'
-  import FolderGrid from '../components/FolderGrid.svelte'
+  import Gallery from '../components/Gallery.svelte'
   import Lightbox from '../components/Lightbox.svelte'
-  import MediaMasonry from '../components/MediaMasonry.svelte'
 
   let { params = {} }: { params?: Record<string, string | null> } = $props()
 
@@ -27,11 +27,6 @@
         ),
   )
   const empty = $derived(data !== null && dirs.length === 0 && media.length === 0)
-
-  function normalizePath(wild: string | null | undefined): string {
-    if (typeof wild !== 'string') return ''
-    return wild.split('/').filter((segment) => segment.length > 0).join('/')
-  }
 
   function openLightbox(index: number): void {
     lightboxIndex = index
@@ -83,16 +78,13 @@
       <span>加载失败：{error}</span>
     </div>
   {:else}
-    {#if dirs.length > 0}
-      <FolderGrid {dirs} {path} />
-    {/if}
     {#if empty}
       <div class="alert alert-info" role="status">
         <span>空文件夹</span>
       </div>
     {/if}
-    {#if media.length > 0}
-      <MediaMasonry items={media} rel={path} onselect={openLightbox} />
+    {#if !empty}
+      <Gallery {dirs} {media} rel={path} onselect={openLightbox} />
     {/if}
   {/if}
 </div>

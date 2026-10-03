@@ -15,10 +15,27 @@
     onload: (width: number, height: number) => void
   } = $props()
 
-  function handleImageLoad(event: Event): void {
+  let loaded = $state(false)
+  let imgEl: HTMLImageElement | undefined = $state()
+
+  function handleLoad(event: Event): void {
     const img = event.currentTarget as HTMLImageElement
+    loaded = true
     onload(img.naturalWidth, img.naturalHeight)
   }
+
+  $effect(() => {
+    void url
+    loaded = false
+  })
+
+  $effect(() => {
+    const el = imgEl
+    if (el?.complete && el.naturalWidth > 0) {
+      loaded = true
+      onload(el.naturalWidth, el.naturalHeight)
+    }
+  })
 </script>
 
 <button
@@ -43,14 +60,22 @@
       >
     </div>
   {:else}
-    <div class="bg-base-200 h-full w-full">
+    <div class="bg-base-200 relative h-full w-full">
+      {#if !loaded}
+        <div class="absolute inset-0 flex items-center justify-center">
+          <span class="loading loading-spinner"></span>
+        </div>
+      {/if}
       <img
+        bind:this={imgEl}
         src={url}
         alt={item.name}
         loading="lazy"
         decoding="async"
-        class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-        onload={handleImageLoad}
+        class="h-full w-full object-cover transition-opacity duration-300 group-hover:scale-[1.02] {loaded
+          ? 'opacity-100'
+          : 'opacity-0'}"
+        onload={handleLoad}
       />
     </div>
   {/if}
