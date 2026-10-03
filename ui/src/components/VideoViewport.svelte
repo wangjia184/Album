@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte'
 
   let { url, title }: { url: string; title: string } = $props()
 </script>

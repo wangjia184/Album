@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte'
+  import Icon from '@iconify/svelte/dist/OfflineIcon.svelte'
   import { fileUrl, type ListedChild } from '../lib/api'
   import MediaInfoPanel from './MediaInfoPanel.svelte'
   import PhotoViewport from './PhotoViewport.svelte'
@@ -61,7 +61,7 @@
       if (copyTimer !== undefined) clearTimeout(copyTimer)
       copyTimer = setTimeout(() => {
         copied = false
-      }, 1500)
+      }, 1000)
     }
   }
 
@@ -108,15 +108,17 @@
   >
     <header class="flex shrink-0 items-center gap-1 border-b border-base-300 p-2">
       <span class="min-w-0 flex-1 truncate px-2 text-sm opacity-80">{item.name}</span>
-      <button
-        type="button"
-        class="btn btn-circle btn-sm btn-ghost"
-        aria-label="复制链接"
-        title={copied ? '已复制' : '复制链接'}
-        onclick={copyLink}
-      >
-        <Icon icon={copied ? 'ph:check-simple' : 'ph:link-simple'} class="h-5 w-5" />
-      </button>
+      <span class="tooltip {copied ? 'tooltip-open' : ''}" data-tip="Url Copied">
+        <button
+          type="button"
+          class="btn btn-circle btn-sm btn-ghost"
+          aria-label="复制链接"
+          title="复制链接"
+          onclick={copyLink}
+        >
+          <Icon icon="ph:link-simple" class="h-5 w-5" />
+        </button>
+      </span>
       <button
         type="button"
         class="btn btn-circle btn-sm btn-ghost"
@@ -125,7 +127,7 @@
         title={infoOpen ? '关闭信息' : '媒体信息'}
         onclick={() => (infoOpen = !infoOpen)}
       >
-        <Icon icon="ph:info" class="h-5 w-5" />
+        <Icon icon="ph:camera" class="h-5 w-5" />
       </button>
       <button
         type="button"

@@ -1,4 +1,5 @@
 import { mount } from 'svelte'
+import './lib/icon-register'
 import './app.css'
 import App from './App.svelte'
 

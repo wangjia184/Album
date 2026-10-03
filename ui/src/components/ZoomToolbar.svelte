@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte'
+  import Icon from '@iconify/svelte/dist/OfflineIcon.svelte'
 
   let {
     onzoomin,
@@ -28,7 +28,7 @@
     title="放大"
     onclick={onzoomin}
   >
-    <Icon icon="ph:zoom-in" class="h-5 w-5" />
+    <Icon icon="ph:magnifying-glass-plus" class="h-5 w-5" />
   </button>
   <button
     type="button"
@@ -37,7 +37,7 @@
     title="缩小"
     onclick={onzoomout}
   >
-    <Icon icon="ph:zoom-out" class="h-5 w-5" />
+    <Icon icon="ph:magnifying-glass-minus" class="h-5 w-5" />
   </button>
   <button
     type="button"
@@ -46,7 +46,7 @@
     title="1:1 原始尺寸"
     onclick={ononeone}
   >
-    <Icon icon="ph:crosshair" class="h-5 w-5" />
+    <Icon icon="ph:ruler" class="h-5 w-5" />
   </button>
   <button
     type="button"

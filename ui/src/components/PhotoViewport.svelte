@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte'
   import ZoomToolbar from './ZoomToolbar.svelte'
 
   let { url, alt }: { url: string; alt: string } = $props()
