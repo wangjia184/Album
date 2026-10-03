@@ -1,26 +1,39 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { push } from 'svelte-spa-router'
+  import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
   import { applyPreset, slotTransform } from '../lib/coverflow'
+  import { splitMediaPath } from '../lib/pipeline'
+  import { mediaHref } from '../lib/path'
 
-  // View-layer only: animation loop, stage pinning, rendering. All slot
-  // geometry lives in lib/coverflow.ts (pure slotTransform(d, S), ratio-based,
-  // fine-grid collision-free presets — see that module's docs).
-  applyPreset('tightSeam') // GAP_C=1.0 / GAP_W=0.65 — swap to 'wingCover' for stronger overlap
+  // View layer only: animation loop, stage pinning, queue window, rendering.
+  // Slot geometry: lib/coverflow.ts (pure slotTransform(d, S), ratio-based,
+  // fine-grid collision-free presets). Photos fill slots via object-fit:cover
+  // (short edge scales to the slot side, other axis center-cropped) so every
+  // cover is exactly S×S regardless of source aspect ratio.
+  applyPreset('tightSeam')
 
-  const M = 3 // slots each side -> 2M+1 = 7 virtual slots
-  // Playhead: the ONE animated state. Everything on screen is f(k - p).
-  // Basic motion: ease p from n to n+1, rest, repeat. Drag/queue later.
-  let p = $state(0)
+  const M = 3 // slots each side → 2M+1 = 7
+  const LIMIT = 2 * M + 1
+  const MID = M // center slot inside a center=true window
   const MOVE_MS = 950
-  const PAUSE_MS = 1800
+  const PAUSE_MS = 1800 // idle window; also the delay between auto moves
+  const MAX_EMPTY_RETRIES = 30
 
-  function easeInOutCubic(t: number): number {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-  }
+  type Status = 'loading' | 'ready' | 'empty' | 'error'
+
+  let p = $state(0) // playhead — the ONE animated state
+  let status = $state<Status>('loading')
+  let error = $state('')
+  let items = $state<QueueItem[]>([])
+  // Stable mapping anchor: item index = k - anchorK + MID. Captured at fetch
+  // time so images never swap mid-move (anchor only re-bases after a
+  // completed move/click recenter, when geometry is at rest).
+  let anchorK = 0
+  let centerQueueIdx = 0 // normalized queue index of the item at slot MID
 
   const SLOT_MIN = 240
-  const SLOT_MAX = 660 // square side cap; also bounded by stage width - 80
-
+  const SLOT_MAX = 660
   let stageH = $state(0)
   let stageW = $state(0)
   const S = $derived(
@@ -28,53 +41,126 @@
   )
 
   const indices = $derived(
-    // Virtual slots follow the playhead: k = round(p) + i. At the mid-point
-    // of a move the window shifts by one — only the two edge slivers
-    // (|d| ≈ 3.5, clipped) are recycled; interior slots keep their k, so
-    // their f(k-p) stays continuous through the hand-off.
-    Array.from({ length: 2 * M + 1 }, (_, i) => Math.round(p) - M + i),
+    Array.from({ length: LIMIT }, (_, i) => Math.round(p) - M + i),
   )
+
+  function itemFor(k: number): QueueItem | null {
+    const j = k - anchorK + MID
+    return j >= 0 && j < items.length ? items[j] : null
+  }
+
+  function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  }
 
   let moveRaf: number | null = null
   let loopTimer: ReturnType<typeof setTimeout> | undefined
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
   let animating = false
   let cancelled = false
 
-  function startMove(): void {
+  async function recenter(queueIdx: number): Promise<void> {
     if (cancelled) return
-    const from = Math.round(p)
-    const to = from + 1
+    try {
+      const resp = await fetchQueue(queueIdx, LIMIT)
+      if (cancelled || resp.images.length === 0) return
+      items = resp.images
+      centerQueueIdx = items[MID].index // normalized truth from the server
+      anchorK = Math.round(p)
+    } catch (err: unknown) {
+      console.warn('coverflow recenter failed', err)
+    }
+  }
+
+  function animateTo(to: number, after?: () => void): void {
+    if (cancelled || animating) return
+    clearTimeout(loopTimer)
+    const from = p
+    const finish = (): void => {
+      p = to
+      animating = false
+      after?.()
+      if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
+    }
+    if (from === to) {
+      finish()
+      return
+    }
     const t0 = performance.now()
     animating = true
     const frame = (now: number): void => {
       if (cancelled) return
       const t = Math.min(1, (now - t0) / MOVE_MS)
-      p = from + (to - from) * easeInOutCubic(t) // the only moving number
-      if (t < 1) {
-        moveRaf = requestAnimationFrame(frame)
-      } else {
-        p = to
-        animating = false
-        loopTimer = setTimeout(startMove, PAUSE_MS)
-      }
+      p = from + (to - from) * easeInOutCubic(t)
+      if (t < 1) moveRaf = requestAnimationFrame(frame)
+      else finish()
     }
     moveRaf = requestAnimationFrame(frame)
   }
 
-  // Stable pseudo-random hue per slot (golden angle) — slots stay
-  // distinguishable across re-renders without any randomness state.
-  function slotColor(k: number): string {
-    const hue = ((k * 137.508) % 360 + 360) % 360
-    return `hsl(${hue.toFixed(1)} 62% 42%)`
+  function startMove(): void {
+    if (cancelled || animating || status !== 'ready') return
+    animateTo(Math.round(p) + 1, () => {
+      void recenter(centerQueueIdx + 1)
+    })
   }
 
-  let stageEl = $state<HTMLDivElement | null>(null)
+  function onSlotClick(k: number): void {
+    if (cancelled || animating || status !== 'ready') return
+    const item = itemFor(k)
+    if (item === null) return
+    if (k === Math.round(p)) {
+      const { dir, file } = splitMediaPath(item.path)
+      push(mediaHref(dir, file))
+      return
+    }
+    const delta = k - Math.round(p) // capture BEFORE the move
+    animateTo(k, () => {
+      void recenter(centerQueueIdx + delta)
+    })
+  }
 
-  // Pin the CLIP box to the VISUAL viewport: fixed positioning escapes main's
-  // container max-width + overflow-x clip (wings must clip at the PAGE edge).
-  // Top/height fill the space below the navbar. The clip box owns
-  // overflow:hidden + perspective; the inner stage owns preserve-3d
-  // (overflow on a preserve-3d element would force flattening).
+  async function bootstrap(): Promise<void> {
+    const offset0 = Math.floor(Math.random() * 1_000_000)
+    let attempts = 0
+    for (;;) {
+      if (cancelled) return
+      try {
+        const resp = await fetchQueue(offset0, LIMIT)
+        if (cancelled) return
+        if (resp.images.length > 0) {
+          items = resp.images
+          anchorK = Math.round(p) // 0
+          centerQueueIdx = items[MID].index
+          status = 'ready'
+          if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
+          return
+        }
+        if (resp.done) {
+          status = 'empty'
+          return
+        }
+        attempts += 1
+        if (attempts > MAX_EMPTY_RETRIES) {
+          status = 'error'
+          error = '扫描超时'
+          return
+        }
+        await new Promise<void>((resolve) => {
+          retryTimer = setTimeout(resolve, 1000)
+        })
+      } catch (err: unknown) {
+        if (cancelled) return
+        status = 'error'
+        error = err instanceof Error ? err.message : String(err)
+        return
+      }
+    }
+  }
+
+  // Pin the CLIP box to the VISUAL viewport (fixed escapes main's container
+  // max-width/overflow); clip owns overflow:hidden + perspective; inner stage
+  // owns preserve-3d (overflow on a preserve-3d element forces flattening).
   function pinStage(): void {
     if (stageEl === null) return
     const clip = stageEl.parentElement
@@ -87,16 +173,18 @@
     clip.style.width = `${document.documentElement.clientWidth}px`
   }
 
+  let stageEl = $state<HTMLDivElement | null>(null)
+
   onMount(() => {
     pinStage()
     const onResize = (): void => pinStage()
     window.addEventListener('resize', onResize)
-    // start the move loop after the initial rest
-    loopTimer = setTimeout(startMove, PAUSE_MS)
+    void bootstrap()
     return () => {
       cancelled = true
       window.removeEventListener('resize', onResize)
       clearTimeout(loopTimer)
+      clearTimeout(retryTimer)
       if (moveRaf !== null) cancelAnimationFrame(moveRaf)
     }
   })
@@ -106,6 +194,15 @@
   class="flex min-h-0 flex-1 flex-col justify-center"
   data-testid="coverflow"
 >
+  {#if status === 'loading'}
+    <span class="loading loading-dots"></span>
+  {:else if status === 'empty'}
+    <span class="text-sm opacity-60">暂无照片</span>
+  {:else if status === 'error'}
+    <div class="alert alert-error py-2 text-sm" role="alert">
+      <span>照片列表加载失败：{error}</span>
+    </div>
+  {/if}
   <div class="cf-clip fixed left-0">
     <div
       class="cf-stage"
@@ -114,34 +211,37 @@
       bind:clientWidth={stageW}
       data-testid="cover-stage"
     >
-    {#each indices as k (k)}
-      {@const d = k - p}
-      {@const t = slotTransform(d, S)}
-      <div
-        class="cf-slot rounded-lg border border-base-100/40"
-        data-cf-slot
-        data-d={d}
-        data-k={k}
-        data-theta={t.theta}
-        style:background={slotColor(k)}
-        style:width="{S}px"
-        style:height="{S}px"
-        style:margin-left="{-S / 2}px"
-        style:margin-top="{-S / 2}px"
-        style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
-      >
-        <!-- three registration points: center, left-edge mid, right-edge mid -->
-        <span class="cf-point bg-info" style:left="50%" style:top="50%"></span>
-        <span class="cf-point bg-accent" style:left="0" style:top="50%"></span>
-        <span class="cf-point bg-accent" style:left="100%" style:top="50%"></span>
-        <span
-          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center select-none"
-        >
-          <span class="text-sm font-semibold leading-4 text-white/95">d {d}</span>
-          <span class="text-[10px] leading-3 text-white/70">k {k}</span>
-        </span>
-      </div>
-    {/each}
+      {#if status === 'ready'}
+        {#each indices as k (k)}
+          {@const d = k - p}
+          {@const t = slotTransform(d, S)}
+          {@const item = itemFor(k)}
+          <button
+            type="button"
+            class="cf-slot cursor-pointer overflow-hidden rounded-lg"
+            data-cf-slot
+            data-d={d}
+            data-k={k}
+            data-theta={t.theta}
+            aria-label={item !== null ? item.path : ''}
+            style:width="{S}px"
+            style:height="{S}px"
+            style:margin-left="{-S / 2}px"
+            style:margin-top="{-S / 2}px"
+            style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
+            onclick={() => onSlotClick(k)}
+          >
+            {#if item !== null}
+              <img
+                src={fileUrl('', item.path)}
+                alt=""
+                class="block h-full w-full object-cover"
+                data-testid="cover-img"
+              />
+            {/if}
+          </button>
+        {/each}
+      {/if}
     </div>
   </div>
 </div>
