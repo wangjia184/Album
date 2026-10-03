@@ -46,10 +46,14 @@
     const phi = rad(d * POS_DELTA)
     const R = side / 2 / Math.tan(rad(POS_DELTA) / 2) * STACK
     const theta = Math.sign(d) * Math.min(Math.abs(d), 1) * WING_ANGLE
+    // Depth bias must scale with S: push each wing fully behind the center
+    // plane (inner edge z ≤ 0) so center/wing planes never intersect —
+    // nearest-wins depth then matches iPad, statically and in motion.
+    const back = d === 0 ? 0 : (side / 2) * Math.sin(rad(WING_ANGLE)) + 24
     return {
       theta,
       tx: R * Math.sin(phi),
-      tz: -R * (1 - Math.cos(phi)),
+      tz: -R * (1 - Math.cos(phi)) - back,
       phiDeg: d * POS_DELTA,
     }
   }
@@ -67,17 +71,21 @@
 
   let stageEl = $state<HTMLDivElement | null>(null)
 
-  // Pin the stage to the VISUAL viewport: fixed positioning escapes main's
-  // container max-width + overflow-x clip (wings must clip at the PAGE edge,
-  // not the container edge). Top/height fill the space below the navbar.
+  // Pin the CLIP box to the VISUAL viewport: fixed positioning escapes main's
+  // container max-width + overflow-x clip (wings must clip at the PAGE edge).
+  // Top/height fill the space below the navbar. The clip box owns
+  // overflow:hidden + perspective; the inner stage owns preserve-3d
+  // (overflow on a preserve-3d element would force flattening).
   function pinStage(): void {
     if (stageEl === null) return
+    const clip = stageEl.parentElement
+    if (clip === null) return
     const main = document.querySelector('main')
     const mr = main?.getBoundingClientRect()
     const top = Math.round((mr?.top ?? 73) + 16)
-    stageEl.style.top = `${top}px`
-    stageEl.style.height = `${Math.max(320, window.innerHeight - top - 16)}px`
-    stageEl.style.width = `${document.documentElement.clientWidth}px`
+    clip.style.top = `${top}px`
+    clip.style.height = `${Math.max(320, window.innerHeight - top - 16)}px`
+    clip.style.width = `${document.documentElement.clientWidth}px`
   }
 
   onMount(() => {
@@ -92,13 +100,14 @@
   class="flex min-h-0 flex-1 flex-col justify-center"
   data-testid="coverflow"
 >
-  <div
-    class="cf-stage fixed left-0"
-    bind:this={stageEl}
-    bind:clientHeight={stageH}
-    bind:clientWidth={stageW}
-    data-testid="cover-stage"
-  >
+  <div class="cf-clip fixed left-0">
+    <div
+      class="cf-stage"
+      bind:this={stageEl}
+      bind:clientHeight={stageH}
+      bind:clientWidth={stageW}
+      data-testid="cover-stage"
+    >
     {#each indices as k (k)}
       {@const d = k - P}
       {@const t = f(d, S)}
@@ -113,7 +122,6 @@
         style:height="{S}px"
         style:margin-left="{-S / 2}px"
         style:margin-top="{-S / 2}px"
-        style:z-index={d === 0 ? 10 : Math.abs(d)}
         style:transform="translate3d({t.tx}px, 0, {t.tz}px) rotateY({t.theta}deg)"
       >
         <!-- three registration points: center, left-edge mid, right-edge mid -->
@@ -128,5 +136,6 @@
         </span>
       </div>
     {/each}
+    </div>
   </div>
 </div>

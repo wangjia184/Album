@@ -169,21 +169,30 @@ main:has([aria-modal='true']) {
 }
 
 /* CoverFlow model (spec: playhead p, slots are pure f(d) of d = k - p).
-   .cf-stage owns the perspective camera; .cf-slot squares are absolutely
-   centered and positioned purely via their inline transform3d. */
-.cf-stage {
-  /* 1600px (not 1200): weaker depth squeeze keeps screen-x of outer slots
-     monotonic — at 1200 + tight STACK, n+3's inner edge overtook n+2. */
-  perspective: 1600px;
-  /* Far slots extend past the viewport on purpose — clip them so the angled
-     row reads as endless (no visible terminus). */
+   .cf-clip: fixed, page-edge box — owns overflow:hidden + perspective
+   (overflow on a preserve-3d element would force flattening!).
+   .cf-stage: shares ONE 3D rendering context (preserve-3d) so sibling
+   slots depth-sort/intersect like physical cards — occlusion is resolved
+   by geometry, which stays correct while the playhead animates. */
+.cf-clip {
   overflow: hidden;
+  perspective: 1600px;
+}
+.cf-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  /* The stage plane itself must not occlude slots behind it in 3D
+     hit-testing — only the slots participate. */
+  pointer-events: none;
 }
 .cf-slot {
   position: absolute;
   left: 50%;
   top: 50%;
   will-change: transform;
+  pointer-events: auto;
 }
 .cf-slot {
   overflow: visible;
