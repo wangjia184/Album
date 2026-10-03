@@ -59,9 +59,9 @@
       modules: [EffectCoverflow],
       effect: 'coverflow',
       initialSlide: initial,
-      // 1.5 → center slide owns ~2/3 of the row; side slides peek in,
-      // heavily rotated + pushed back so they read as squeezed at the edges.
-      slidesPerView: 1.5,
+      // Fixed-width slides: the box never scales with the viewport, so side
+      // photos stay close to the center and nothing overflows the container.
+      slidesPerView: 'auto',
       centeredSlides: true,
       loop: false,
       grabCursor: true,
@@ -210,7 +210,7 @@
 </script>
 
 <div
-  class="ml-[calc(50%-50vw)] flex min-h-0 w-screen max-w-none flex-1 flex-col items-center justify-center gap-3"
+  class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3"
   data-testid="coverflow"
 >
   {#if status === 'loading'}
@@ -225,7 +225,8 @@
     <div class="swiper w-full" bind:this={rootEl} data-testid="coverflow-swiper">
       <div class="swiper-wrapper">
         {#each items as item, i (i)}
-          <div class="swiper-slide" data-testid="cover-slide">
+          <!-- inline width: swiper.css `.swiper-slide{width:100%}` out-cascades Tailwind's w-[640px] -->
+          <div class="swiper-slide" style="width: 640px" data-testid="cover-slide">
             <button
               type="button"
               class="block h-96 w-full cursor-pointer"
