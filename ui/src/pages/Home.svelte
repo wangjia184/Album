@@ -1,26 +1,19 @@
 <script lang="ts">
-  const PLACEHOLDER_ITEMS = [
-    { id: 1 },
-    { id: 2 },
-    { id: 3 },
-    { id: 4 },
-    { id: 5 },
-  ]
+  import { push } from 'svelte-spa-router'
+  import Stage from '../components/Stage.svelte'
+  import FilmStrip from '../components/FilmStrip.svelte'
+  import { splitMediaPath } from '../lib/pipeline'
+  import { mediaHref } from '../lib/path'
+
+  let current = $state<string | null>(null)
+
+  function open(path: string): void {
+    const { dir, file } = splitMediaPath(path)
+    push(mediaHref(dir, file))
+  }
 </script>
 
-<section class="flex flex-col gap-4">
-  <div class="card bg-base-200">
-    <div class="card-body">
-      <h1 class="card-title text-2xl">流光</h1>
-      <p class="text-sm opacity-70">随机轮播（占位）——精选照片自动轮播，后续接入真实媒体。</p>
-    </div>
-  </div>
-
-  <div class="carousel carousel-center w-full gap-4 rounded-box bg-base-200 p-4">
-    {#each PLACEHOLDER_ITEMS as item (item.id)}
-      <div class="carousel-item flex h-64 w-96 flex-col items-center justify-center rounded-box bg-base-300">
-        <span class="text-4xl opacity-40">{item.id}</span>
-      </div>
-    {/each}
-  </div>
+<section class="flex min-h-0 flex-1 flex-col gap-3">
+  <Stage {current} onopen={open} />
+  <FilmStrip oncurrent={(path) => { current = path }} />
 </section>

@@ -101,9 +101,9 @@
   {/each}
 </div>
 
-<div class="flex min-h-screen flex-col">
+<div class="flex h-dvh flex-col overflow-hidden">
   <NavBar />
-  <main class="container relative z-10 mx-auto flex-1 p-4">
+  <main class="container relative z-10 mx-auto flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
     <Router {routes} />
   </main>
 </div>
