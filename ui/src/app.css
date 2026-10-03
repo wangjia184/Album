@@ -107,3 +107,10 @@ html {
     animation: none;
   }
 }
+
+/* Lock the app-shell scroller while a modal lightbox is open (body lock
+   alone no longer suffices since main became the scroll container).
+   `clip` not `hidden`: hidden still allows programmatic scrollTop. */
+main:has([aria-modal='true']) {
+  overflow: clip;
+}
