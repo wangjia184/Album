@@ -13,8 +13,13 @@
   applyPreset('tightSeam')
 
   const M = 3 // slots each side → 2M+1 = 7
-  const LIMIT = 2 * M + 1
-  const MID = M // center slot inside a center=true window
+  const SLOT_COUNT = 2 * M + 1 // visible slots (keys round(p)±3) — always 7
+  const LIMIT = 2 * M + 3 // fetch 9 — one spare each side beyond the visible
+                          // slots: during the 2nd half of a move the window
+                          // keys shift +1 and the new edge slot needs its photo
+                          // BEFORE the end-of-move recenter (no pop-in at rest)
+  const MID = M + 1 // = 4: center index inside a center=true window of 9
+                    // (server: floor((9-1)/2) = 4)
   const MOVE_MS = 950
   const PAUSE_MS = 4050 // pause; MOVE+PAUSE = 5s cycle
   const MAX_EMPTY_RETRIES = 30
@@ -42,7 +47,7 @@
   )
 
   const indices = $derived(
-    Array.from({ length: LIMIT }, (_, i) => Math.round(p) - M + i),
+    Array.from({ length: SLOT_COUNT }, (_, i) => Math.round(p) - M + i),
   )
 
   function itemFor(k: number): QueueItem | null {

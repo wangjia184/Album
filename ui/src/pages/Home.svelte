@@ -11,7 +11,11 @@
   // Default = viewport orientation (landscape → cover, portrait → strip);
   // the floating toggle pins a manual choice until reload. No mode query.
   let manual: 'cover' | 'strip' | null = $state(null)
-  let landscape = $state(false)
+  // Synchronous initial value: a false→true flip in onMount would flash strip
+  // mode (and fire its queue fetch) before switching to cover on load.
+  let landscape = $state(
+    typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches,
+  )
 
   const mode = $derived(manual ?? (landscape ? 'cover' : 'strip'))
 
