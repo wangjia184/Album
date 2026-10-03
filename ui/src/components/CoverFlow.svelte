@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { fetchQueue, fileUrl, type QueueItem } from '../lib/api'
-  import { applyPreset, slotOpacity, slotTransform } from '../lib/coverflow'
+  import { applyPreset, slotTransform } from '../lib/coverflow'
   import { splitMediaPath } from '../lib/pipeline'
   import { mediaHref, toSegments } from '../lib/path'
 
@@ -59,6 +59,23 @@
     if (!loaded.includes(item.path)) loaded = [...loaded, item.path]
   }
 
+  // Warm every photo in the 9-window so the mid-move key-shift insertion
+  // (new edge slot at p crossing .5) hits cache — no network/decode during
+  // the animation.
+  const warmed = new Set<HTMLImageElement>()
+  function prefetchWindow(): void {
+    for (const item of items) {
+      const im = new Image()
+      warmed.add(im)
+      const settle = (): void => {
+        warmed.delete(im)
+      }
+      im.onload = settle
+      im.onerror = settle
+      im.src = fileUrl('', item.path)
+    }
+  }
+
   function easeInOutCubic(t: number): number {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
   }
@@ -77,6 +94,7 @@
       items = resp.images
       centerQueueIdx = items[MID].index // normalized truth from the server
       anchorK = Math.round(p)
+      prefetchWindow()
     } catch (err: unknown) {
       console.warn('coverflow recenter failed', err)
     }
@@ -145,6 +163,7 @@
           anchorK = Math.round(p) // 0
           centerQueueIdx = items[MID].index
           status = 'ready'
+          prefetchWindow()
           if (!cancelled) loopTimer = setTimeout(startMove, PAUSE_MS)
           return
         }
@@ -247,7 +266,6 @@
           >
             <div
               class="h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
-              style:opacity={slotOpacity(d)}
             >
               {#if item !== null}
               <img
