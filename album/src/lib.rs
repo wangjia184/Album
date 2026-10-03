@@ -2,6 +2,7 @@ pub mod api;
 pub mod fs;
 pub mod fs_api;
 pub mod mount;
+pub mod queue;
 pub mod static_files;
 
 use axum::http::{header, HeaderValue, Method};

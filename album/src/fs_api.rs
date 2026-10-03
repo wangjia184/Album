@@ -12,18 +12,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio_util::io::ReaderStream;
 
-use crate::fs::AlbumFs;
+use crate::fs::{is_image_path, AlbumFs};
 use crate::AppState;
-
-const IMAGE_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"];
-
-fn is_image_path(path: &str) -> bool {
-    std::path::Path::new(path)
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .map(|ext| IMAGE_EXTS.contains(&ext.as_str()))
-        .unwrap_or(false)
-}
 
 fn exif_string(exif: &exif::Exif, tag: exif::Tag) -> Option<String> {
     exif.get_field(tag, exif::In::PRIMARY)

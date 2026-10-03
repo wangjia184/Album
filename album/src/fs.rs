@@ -48,6 +48,11 @@ fn kind_from_name(name: &str) -> ChildKind {
     }
 }
 
+/// True when `name` classifies as an image (single policy home for exts).
+pub(crate) fn is_image_path(name: &str) -> bool {
+    kind_from_name(name) == ChildKind::Image
+}
+
 impl AlbumFs {
     /// Canonicalize `root` at construction; fail if not a directory.
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
