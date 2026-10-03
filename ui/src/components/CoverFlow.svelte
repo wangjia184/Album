@@ -17,7 +17,7 @@
   const LIMIT = 2 * M + 1
   const MID = M // center slot inside a center=true window
   const MOVE_MS = 950
-  const PAUSE_MS = 7050 // idle window; also the delay between auto moves
+  const PAUSE_MS = 4050 // pause; MOVE+PAUSE = 5s cycle
   const MAX_EMPTY_RETRIES = 30
 
   type Status = 'loading' | 'ready' | 'empty' | 'error'
