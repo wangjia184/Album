@@ -24,16 +24,16 @@
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </summary>
-        <ul class="menu dropdown-content z-50 mt-2 w-52 rounded-box bg-primary p-2 text-lg shadow-lg">
-          <li class:menu-active={isHome}><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-          <li class:menu-active={isAlbum}><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
+        <ul class="menu dropdown-content z-50 mt-2 w-52 rounded-box bg-base-100 p-2 text-lg text-base-content shadow-lg">
+          <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+          <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
         </ul>
       </details>
     </div>
     <div class="hidden gap-1 lg:flex">
-      <ul class="menu menu-horizontal px-1 text-lg">
-        <li class:menu-active={isHome}><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-        <li class:menu-active={isAlbum}><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
+      <ul class="menu menu-horizontal rounded-box bg-base-100 p-1 text-lg text-base-content">
+        <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+        <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
       </ul>
     </div>
   </div>
