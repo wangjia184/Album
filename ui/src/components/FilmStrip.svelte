@@ -51,7 +51,13 @@
   }
 
   async function autoAdvance(): Promise<void> {
-    if (cancelled || inFlight || status !== 'ready' || current === null) return
+    if (cancelled || status !== 'ready' || current === null) return
+    if (inFlight) {
+      // Collision with refill (or a prior advance): re-arm so an idle user
+      // never ends up with a permanently disarmed timer.
+      resetIdle()
+      return
+    }
     inFlight = true
     try {
       const resp = await fetchQueue(current.index + 1, capacity)
@@ -100,6 +106,9 @@
       console.warn('queue refill failed', err)
     } finally {
       inFlight = false
+      // Always re-arm: if the idle timer fired (and bailed) while this refill
+      // held inFlight, nobody else will restart rotation for an idle user.
+      if (!cancelled && status === 'ready') resetIdle()
     }
   }
 
