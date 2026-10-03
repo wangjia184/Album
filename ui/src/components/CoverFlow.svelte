@@ -219,7 +219,7 @@
       <span>照片列表加载失败：{error}</span>
     </div>
   {:else if status === 'ready'}
-    <div class="w-full max-w-4xl" bind:this={rootEl} data-testid="coverflow-swiper">
+    <div class="swiper w-full max-w-4xl" bind:this={rootEl} data-testid="coverflow-swiper">
       <div class="swiper-wrapper">
         {#each items as item, i (i)}
           <div class="swiper-slide" data-testid="cover-slide">
@@ -229,11 +229,7 @@
               aria-label={item.path}
               onclick={() => onSlideClick(i)}
             >
-              <div
-                class="h-full w-full p-2 {i === activeIdx
-                  ? 'bg-white ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]'
-                  : ''}"
-              >
+              <div class="h-full w-full overflow-hidden rounded-lg">
                 <img
                   src={fileUrl('', item.path)}
                   alt=""
