@@ -1,4 +1,10 @@
 <script lang="ts">
+  import { router } from 'svelte-spa-router'
+
+  const route = $derived(router.location)
+
+  const isHome = $derived(route === '/')
+  const isAlbum = $derived(route === '/album' || (route ?? '').startsWith('/album/'))
 </script>
 
 <div class="navbar bg-primary text-primary-content sticky top-0 z-40 shadow">
@@ -19,15 +25,15 @@
           </svg>
         </summary>
         <ul class="menu dropdown-content z-50 mt-2 w-52 rounded-box bg-primary p-2 text-lg shadow-lg">
-          <li><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-          <li><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
+          <li class:menu-active={isHome}><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+          <li class:menu-active={isAlbum}><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
         </ul>
       </details>
     </div>
     <div class="hidden gap-1 lg:flex">
       <ul class="menu menu-horizontal px-1 text-lg">
-        <li><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-        <li><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
+        <li class:menu-active={isHome}><a href="#/"><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+        <li class:menu-active={isAlbum}><a href="#/album"><span aria-hidden="true">🖼️</span>相册</a></li>
       </ul>
     </div>
   </div>
