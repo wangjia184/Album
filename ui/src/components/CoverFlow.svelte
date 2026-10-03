@@ -18,9 +18,11 @@
   const WING_ANGLE = 38 // deg — ALL wings face the same moderate angle (iPad
                         // side covers show art, they are not edge-on slivers;
                         // uniform width + fixed pitch = natural overlap)
-  const STACK = 0.55 // pull wing positions inward so each successive cover
-                     // occludes part of the previous one (≈30px+ at the
-                     // straight-line pitch)
+  const STACK = 0.55 // depth-curve weight for tz only (lane x no longer uses it)
+  const GAP_C = 1.0  // center-adjacent lane pitch ×S — collision-free per
+                     // point-in-both-quads oracle (live arc was 4 collisions);
+                     // gives the center card ~200px more breathing room in motion
+  const GAP_W = 0.5  // wing lane pitch ×S — 124px parallel-safe overlap (tight)
   const THETA_CAP = 60 // deg safety — projection fold-back guard (unused at 38)
   const M = 3 // slots each side -> 2M+1 = 7 virtual slots
   // Playhead: the ONE animated state. Everything on screen is f(k - p).
@@ -52,6 +54,15 @@
   function f(d: number, side: number): SlotXf {
     const rad = (deg: number): number => (deg * Math.PI) / 180
     const phi = rad(d * POS_DELTA)
+    const ad = Math.abs(d)
+    const sgn = Math.sign(d)
+    // Piecewise-linear lane: |d|≤1 uses the wider GAP_C pitch (motion safety —
+    // turning cards never interpenetrate neighbors), beyond uses tight GAP_W
+    // (parallel wings, overlap is depth-safe). Continuous at |d|=1.
+    const tx =
+      ad <= 1
+        ? sgn * side * GAP_C * ad
+        : sgn * (side * GAP_C + (ad - 1) * side * GAP_W)
     const R = side / 2 / Math.tan(rad(POS_DELTA) / 2) * STACK
     const theta = Math.sign(d) * Math.min(Math.abs(d), 1) * WING_ANGLE
     // Depth bias must scale with S AND stay continuous in d: wings parked at
@@ -62,7 +73,7 @@
     const back = backFull * Math.min(Math.abs(d), 1)
     return {
       theta,
-      tx: R * Math.sin(phi),
+      tx,
       tz: -R * (1 - Math.cos(phi)) - back,
       phiDeg: d * POS_DELTA,
     }
