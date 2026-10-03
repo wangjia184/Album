@@ -103,16 +103,16 @@
       onclick={openCurrent}
     >
       <div
-        class="bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+        class="bg-white p-3 transition-opacity duration-[800ms] ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
         data-transition={lastTransition}
+        style:opacity={visible ? '1' : '0'}
       >
         <div class="stage-fx-host relative">
           <img
             data-testid="stage-img"
             src={shownSrc}
             alt=""
-            class="block max-h-[calc(100dvh-14rem)] max-w-[calc(100vw-6rem)] object-contain transition-opacity duration-[800ms]"
-            style:opacity={visible ? '1' : '0'}
+            class="block max-h-[calc(100dvh-14rem)] max-w-[calc(100vw-6rem)] object-contain"
           />
           {#if incoming}
             <img
