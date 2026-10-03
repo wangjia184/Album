@@ -102,7 +102,7 @@ export function slotTransform(d: number, S: number): SlotXf {
  * Applied on the inner (2D) frame so the slot's preserve-3d participation
  * is untouched; multiplies with the img's load-fade (0→1).
  */
-export const OPACITY_CENTER = 0.8
+export const OPACITY_CENTER = 0.9
 export const OPACITY_EDGE = 0.2
 export const OPACITY_FALLOFF_D = 3 // matches M slots per side
 
