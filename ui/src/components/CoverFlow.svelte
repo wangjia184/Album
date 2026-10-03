@@ -55,6 +55,13 @@
     Array.from({ length: 2 * M + 1 }, (_, i) => i - M),
   )
 
+  // Stable pseudo-random hue per slot (golden angle) — slots stay
+  // distinguishable across re-renders without any randomness state.
+  function slotColor(k: number): string {
+    const hue = ((k * 137.508) % 360 + 360) % 360
+    return `hsl(${hue.toFixed(1)} 62% 42%)`
+  }
+
   let stageEl = $state<HTMLDivElement | null>(null)
 
   // Pin the stage to the VISUAL viewport: 100vw includes classic scrollbars
@@ -97,15 +104,12 @@
       {@const d = k - P}
       {@const t = f(d, S)}
       <div
-        class="cf-slot rounded-lg {d === 0
-          ? 'border-2 border-primary bg-primary'
-          : Math.abs(d) <= 1
-            ? 'border border-secondary bg-base-300'
-            : 'border border-base-100/50 bg-base-300/95'}"
+        class="cf-slot rounded-lg border border-base-100/40"
         data-cf-slot
         data-d={d}
         data-k={k}
         data-theta={t.theta}
+        style:background={slotColor(k)}
         style:width="{S}px"
         style:height="{S}px"
         style:margin-left="{-S / 2}px"
@@ -117,9 +121,11 @@
         <span class="cf-point bg-info" style:left="50%" style:top="50%"></span>
         <span class="cf-point bg-accent" style:left="0" style:top="50%"></span>
         <span class="cf-point bg-accent" style:left="100%" style:top="50%"></span>
-        <span class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center select-none text-center">
-          <span class="text-sm font-semibold leading-4 opacity-90">d {d}</span>
-          <span class="text-[10px] leading-3 opacity-50">k {k}</span>
+        <span
+          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center select-none"
+        >
+          <span class="text-sm font-semibold leading-4 text-white/95">d {d}</span>
+          <span class="text-[10px] leading-3 text-white/70">k {k}</span>
         </span>
       </div>
     {/each}
