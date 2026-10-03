@@ -247,7 +247,7 @@
             </div>
             {#if parentSegs.length > 0}
               <span
-                class="badge badge-sm absolute bottom-2 left-2 z-20 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
+                class="badge badge-sm absolute bottom-2 left-2 z-20 ml-2 mb-2 max-w-[90%] bg-base-100/70 text-base-content/90 backdrop-blur"
                 data-testid="cover-parent"
               >
                 <span class="block truncate whitespace-nowrap">{parentSegs.join(' › ')}</span>
