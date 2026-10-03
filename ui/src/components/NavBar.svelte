@@ -31,9 +31,9 @@
       </details>
     </div>
     <div class="hidden gap-1 lg:flex">
-      <ul class="menu menu-horizontal rounded-box bg-base-100 p-1 text-lg text-base-content">
-        <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
-        <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary font-medium' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
+      <ul class="menu menu-horizontal gap-1 px-1 text-lg">
+        <li><a href="#/" class={isHome ? 'bg-primary/20 text-primary-content font-medium rounded-lg' : ''}><span aria-hidden="true">🌸</span>朝花夕拾</a></li>
+        <li><a href="#/album" class={isAlbum ? 'bg-primary/20 text-primary-content font-medium rounded-lg' : ''}><span aria-hidden="true">🖼️</span>相册</a></li>
       </ul>
     </div>
   </div>
