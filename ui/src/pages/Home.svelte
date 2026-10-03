@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { push, router } from 'svelte-spa-router'
+  import { onMount } from 'svelte'
+  import { push } from 'svelte-spa-router'
   import Stage from '../components/Stage.svelte'
   import FilmStrip from '../components/FilmStrip.svelte'
   import CoverFlow from '../components/CoverFlow.svelte'
@@ -7,30 +8,49 @@
   import { mediaHref } from '../lib/path'
 
   let current = $state<string | null>(null)
+  // Default = viewport orientation (landscape → cover, portrait → strip);
+  // the floating toggle pins a manual choice until reload. No mode query.
+  let manual: 'cover' | 'strip' | null = $state(null)
+  let landscape = $state(false)
 
-  // ?mode=cover selects the cover-flow placeholder; anything else (incl.
-  // missing/invalid) keeps the default stage + film-strip mode.
-  const mode = $derived.by(() => {
-    const qs = router.querystring
-    return new URLSearchParams(qs || '').get('mode')
-  })
-  const isCover = $derived(mode === 'cover')
+  const mode = $derived(manual ?? (landscape ? 'cover' : 'strip'))
 
   function open(path: string): void {
     const { dir, file } = splitMediaPath(path)
     push(mediaHref(dir, file))
   }
+
+  onMount(() => {
+    const mq = window.matchMedia('(orientation: landscape)')
+    landscape = mq.matches
+    const onChange = (e: MediaQueryListEvent): void => {
+      landscape = e.matches
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  })
 </script>
 
 <section class="relative flex min-h-0 flex-1 flex-col gap-3">
-  <div class="join absolute right-2 top-2 z-20 rounded-lg bg-base-100/60 p-1 backdrop-blur">
-    <a href="#/" class="join-item btn btn-xs {isCover ? '' : 'btn-active'}">横条</a>
-    <a
-      href="#/?mode=cover"
-      class="join-item btn btn-xs {isCover ? 'btn-active' : ''}">Cover</a
+  <div
+    class="join absolute right-2 top-2 z-20 rounded-lg bg-base-100/60 p-1 backdrop-blur"
+  >
+    <button
+      type="button"
+      class="join-item btn btn-xs {mode === 'strip' ? 'btn-active' : ''}"
+      onclick={() => {
+        manual = 'strip'
+      }}>横条</button
+    >
+    <button
+      type="button"
+      class="join-item btn btn-xs {mode === 'cover' ? 'btn-active' : ''}"
+      onclick={() => {
+        manual = 'cover'
+      }}>Cover</button
     >
   </div>
-  {#if isCover}
+  {#if mode === 'cover'}
     <CoverFlow />
   {:else}
     <Stage {current} onopen={open} />
