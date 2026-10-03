@@ -10,7 +10,7 @@
 
 <a
   href={childHref(parentPath, name)}
-  class="flex h-full w-full flex-col items-start justify-end gap-2 rounded-lg border border-base-300 bg-base-200 p-3 transition-colors hover:bg-base-300"
+  class="flex h-full w-full flex-col items-start justify-end gap-2 rounded-lg border border-base-300 bg-base-200 p-3 opacity-50 transition hover:bg-base-300 hover:opacity-100"
   style:aspect-ratio="4 / 3"
 >
   <div class="flex items-center gap-2 min-w-0">

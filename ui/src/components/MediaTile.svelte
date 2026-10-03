@@ -45,7 +45,7 @@
   aria-label="打开 {item.name}"
 >
   {#if item.kind === 'video'}
-    <div class="bg-neutral text-neutral-content flex h-full w-full flex-col items-center justify-center gap-2 p-2">
+    <div class="bg-neutral text-neutral-content flex h-full w-full flex-col items-center justify-center gap-2 p-2 opacity-50 transition-opacity group-hover:opacity-100">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="h-10 w-10"
@@ -73,7 +73,7 @@
         loading="lazy"
         decoding="async"
         class="h-full w-full object-cover transition-opacity duration-300 group-hover:scale-[1.02] {loaded
-          ? 'opacity-100'
+          ? 'opacity-50 group-hover:opacity-100'
           : 'opacity-0'}"
         onload={handleLoad}
       />

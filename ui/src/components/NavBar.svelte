@@ -7,7 +7,7 @@
   const isAlbum = $derived(route === '/album' || (route ?? '').startsWith('/album/'))
 </script>
 
-<div class="navbar sticky top-0 z-40 border-b border-base-300 bg-base-100/70 text-base-content backdrop-blur-md shadow-sm">
+<div class="navbar sticky top-0 z-40 border-b border-base-300 bg-base-100/50 text-base-content backdrop-blur-md shadow-sm">
   <div class="navbar-start">
     <div class="flex-none lg:hidden">
       <details class="dropdown">
