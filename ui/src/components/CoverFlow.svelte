@@ -78,16 +78,20 @@
     rebind()
   }
 
+  // Bind paths for the current key window. When the fetched window does not
+  // match yet (just re-based / fetch in flight), KEEP prior paths for keys
+  // that still exist — wiping them would unmount every badge (visible flash
+  // at each rest). Only newly appeared keys start as white boards.
   function rebind(): void {
     const next: Record<number, string | null> = {}
     const usable = itemsBase === windowBase && items.length > 0
     for (const k of indices) {
-      if (!usable) {
-        next[k] = null
-        continue
+      if (usable) {
+        const j = k - windowBase + MID
+        next[k] = j >= 0 && j < items.length ? items[j].path : null
+      } else {
+        next[k] = bindings[k] ?? null
       }
-      const j = k - windowBase + MID
-      next[k] = j >= 0 && j < items.length ? items[j].path : null
     }
     bindings = next
   }
