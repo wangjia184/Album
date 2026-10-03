@@ -1,14 +1,22 @@
 <script lang="ts">
+  import Icon from '@iconify/svelte'
+
   let {
     onzoomin,
     onzoomout,
     ononeone,
     onautofit,
+    onrotateccw,
+    onrotatecw,
+    showRotate,
   }: {
     onzoomin: () => void
     onzoomout: () => void
     ononeone: () => void
     onautofit: () => void
+    onrotateccw: () => void
+    onrotatecw: () => void
+    showRotate: boolean
   } = $props()
 </script>
 
@@ -20,10 +28,7 @@
     title="放大"
     onclick={onzoomin}
   >
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M21 21l-4.3-4.3M11 8v6M8 11h6" />
-    </svg>
+    <Icon icon="ph:zoom-in" class="h-5 w-5" />
   </button>
   <button
     type="button"
@@ -32,27 +37,45 @@
     title="缩小"
     onclick={onzoomout}
   >
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M21 21l-4.3-4.3M8 11h6" />
-    </svg>
+    <Icon icon="ph:zoom-out" class="h-5 w-5" />
   </button>
   <button
     type="button"
-    class="btn btn-sm btn-ghost"
+    class="btn btn-circle btn-sm btn-ghost"
     aria-label="1:1"
     title="1:1 原始尺寸"
     onclick={ononeone}
   >
-    1:1
+    <Icon icon="ph:crosshair" class="h-5 w-5" />
   </button>
   <button
     type="button"
-    class="btn btn-sm btn-ghost"
+    class="btn btn-circle btn-sm btn-ghost"
     aria-label="AutoFit"
     title="自适应视口"
     onclick={onautofit}
   >
-    AutoFit
+    <Icon icon="ph:frame-corners" class="h-5 w-5" />
   </button>
+  {#if showRotate}
+    <span class="mx-1 h-5 w-px bg-base-300" aria-hidden="true"></span>
+    <button
+      type="button"
+      class="btn btn-circle btn-sm btn-ghost"
+      aria-label="左旋"
+      title="左旋 90°"
+      onclick={onrotateccw}
+    >
+      <Icon icon="ph:arrow-counter-clockwise" class="h-5 w-5" />
+    </button>
+    <button
+      type="button"
+      class="btn btn-circle btn-sm btn-ghost"
+      aria-label="右旋"
+      title="右旋 90°"
+      onclick={onrotatecw}
+    >
+      <Icon icon="ph:arrow-clockwise" class="h-5 w-5" />
+    </button>
+  {/if}
 </div>

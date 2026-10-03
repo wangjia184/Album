@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '@iconify/svelte'
   import ZoomToolbar from './ZoomToolbar.svelte'
 
   let { url, alt }: { url: string; alt: string } = $props()
@@ -15,26 +16,31 @@
   let scale = $state(1)
   let offsetX = $state(0)
   let offsetY = $state(0)
+  let rotation = $state(0)
   let dragging = $state(false)
   let dragStart = $state({ x: 0, y: 0, ox: 0, oy: 0 })
 
+  const rotated = $derived(rotation % 180 !== 0)
+  const displayW = $derived(rotated ? natural.h : natural.w)
+  const displayH = $derived(rotated ? natural.w : natural.h)
+
   const autofitScale = $derived.by(() => {
-    if (natural.w <= 0 || natural.h <= 0 || viewportW <= 0 || viewportH <= 0) return 1
-    return Math.min(viewportW / natural.w, viewportH / natural.h, 1)
+    if (displayW <= 0 || displayH <= 0 || viewportW <= 0 || viewportH <= 0) return 1
+    return Math.min(viewportW / displayW, viewportH / displayH, 1)
   })
 
   const maxScale = $derived(
-    Math.min(MAX_SCALE, natural.w > 0 ? Math.max(autofitScale, 1) : MAX_SCALE),
+    Math.min(MAX_SCALE, displayW > 0 ? Math.max(autofitScale, 1) : MAX_SCALE),
   )
 
   const exceeds = $derived.by(() => {
-    if (natural.w <= 0) return false
-    return natural.w * scale > viewportW + 1 || natural.h * scale > viewportH + 1
+    if (displayW <= 0) return false
+    return displayW * scale > viewportW + 1 || displayH * scale > viewportH + 1
   })
 
   function clampOffsets(): void {
-    const halfW = Math.max(0, (natural.w * scale - viewportW) / 2)
-    const halfH = Math.max(0, (natural.h * scale - viewportH) / 2)
+    const halfW = Math.max(0, (displayW * scale - viewportW) / 2)
+    const halfH = Math.max(0, (displayH * scale - viewportH) / 2)
     offsetX = Math.max(-halfW, Math.min(halfW, offsetX))
     offsetY = Math.max(-halfH, Math.min(halfH, offsetY))
   }
@@ -57,6 +63,11 @@
 
   function oneOne(): void {
     scale = Math.min(maxScale, Math.max(MIN_SCALE, 1))
+    clampOffsets()
+  }
+
+  function rotate(delta: number): void {
+    rotation = (rotation + delta + 360) % 360
     clampOffsets()
   }
 
@@ -92,6 +103,7 @@
     scale = 1
     offsetX = 0
     offsetY = 0
+    rotation = 0
     dragging = false
   })
 
@@ -140,7 +152,7 @@
       {alt}
       draggable="false"
       class="absolute left-1/2 top-1/2 max-w-none select-none"
-      style:transform="translate(-50%, -50%) translate({offsetX}px, {offsetY}px) scale({scale})"
+      style:transform="translate(-50%, -50%) translate({offsetX}px, {offsetY}px) rotate({rotation}deg) scale({scale})"
       onload={handleLoad}
     />
   </div>
@@ -150,6 +162,9 @@
       onzoomout={() => zoomBy(1 / STEP)}
       ononeone={oneOne}
       onautofit={autofit}
+      onrotateccw={() => rotate(-90)}
+      onrotatecw={() => rotate(90)}
+      showRotate
     />
   </div>
 </div>

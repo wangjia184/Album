@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '@iconify/svelte'
   import { fileUrl, type ListedChild } from '../lib/api'
   import MediaInfoPanel from './MediaInfoPanel.svelte'
   import PhotoViewport from './PhotoViewport.svelte'
@@ -20,14 +21,59 @@
 
   const item = $derived(index >= 0 && index < items.length ? items[index] : null)
   const url = $derived(item === null ? '' : fileUrl(rel, item.name))
+  const absoluteUrl = $derived(item === null ? '' : new URL(url, window.location.origin).href)
   const canPrev = $derived(index > 0)
   const canNext = $derived(index < items.length - 1)
 
   let infoOpen = $state(false)
+  let copied = $state(false)
+  let copyTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function copyLink(): Promise<void> {
+    if (absoluteUrl === '') return
+    let ok = false
+    try {
+      if (navigator.clipboard !== undefined && window.isSecureContext) {
+        await navigator.clipboard.writeText(absoluteUrl)
+        ok = true
+      }
+    } catch {
+      ok = false
+    }
+    if (!ok) {
+      // HTTP / non-secure contexts: fallback textarea + execCommand
+      const ta = document.createElement('textarea')
+      ta.value = absoluteUrl
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.left = '-9999px'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        ok = document.execCommand('copy')
+      } catch {
+        ok = false
+      }
+      ta.remove()
+    }
+    copied = ok
+    if (ok) {
+      if (copyTimer !== undefined) clearTimeout(copyTimer)
+      copyTimer = setTimeout(() => {
+        copied = false
+      }, 1500)
+    }
+  }
 
   $effect(() => {
-    infoOpen = false
+    return () => {
+      if (copyTimer !== undefined) clearTimeout(copyTimer)
+    }
+  })
+
+  $effect(() => {
     void index
+    copied = false
   })
 
   $effect(() => {
@@ -60,29 +106,35 @@
     aria-modal="true"
     aria-label={item.name}
   >
-    <header class="flex shrink-0 items-center gap-2 border-b border-base-300 p-2">
+    <header class="flex shrink-0 items-center gap-1 border-b border-base-300 p-2">
       <span class="min-w-0 flex-1 truncate px-2 text-sm opacity-80">{item.name}</span>
+      <button
+        type="button"
+        class="btn btn-circle btn-sm btn-ghost"
+        aria-label="复制链接"
+        title={copied ? '已复制' : '复制链接'}
+        onclick={copyLink}
+      >
+        <Icon icon={copied ? 'ph:check-simple' : 'ph:link-simple'} class="h-5 w-5" />
+      </button>
       <button
         type="button"
         class="btn btn-circle btn-sm btn-ghost"
         aria-label={infoOpen ? '关闭信息面板' : '打开信息面板'}
         aria-pressed={infoOpen}
+        title={infoOpen ? '关闭信息' : '媒体信息'}
         onclick={() => (infoOpen = !infoOpen)}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 11v5M12 8h.01" />
-        </svg>
+        <Icon icon="ph:info" class="h-5 w-5" />
       </button>
       <button
         type="button"
         class="btn btn-circle btn-sm btn-ghost"
         aria-label="关闭"
+        title="关闭"
         onclick={onclose}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
+        <Icon icon="ph:x" class="h-5 w-5" />
       </button>
     </header>
 
@@ -99,18 +151,20 @@
           class="btn btn-circle btn-sm btn-ghost absolute left-2 top-1/2 -translate-y-1/2"
           disabled={!canPrev}
           aria-label="上一张"
+          title="上一张"
           onclick={() => onnavigate(-1)}
         >
-          ←
+          <Icon icon="ph:caret-left" class="h-5 w-5" />
         </button>
         <button
           type="button"
           class="btn btn-circle btn-sm btn-ghost absolute right-2 top-1/2 -translate-y-1/2"
           disabled={!canNext}
           aria-label="下一张"
+          title="下一张"
           onclick={() => onnavigate(1)}
         >
-          →
+          <Icon icon="ph:caret-right" class="h-5 w-5" />
         </button>
       </div>
 
