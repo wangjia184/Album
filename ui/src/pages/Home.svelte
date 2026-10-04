@@ -48,15 +48,15 @@
         manual = 'strip'
       }}>画框</button
     >
-    <button
-      type="button"
-      class="join-item btn btn-xs {mode === 'cover' ? 'btn-active' : ''}"
-      disabled={!canCover}
-      title={canCover ? undefined : '当前环境不支持 Web Worker'}
-      onclick={() => {
-        if (canCover) manual = 'cover'
-      }}>封面</button
-    >
+    {#if canCover}
+      <button
+        type="button"
+        class="join-item btn btn-xs {mode === 'cover' ? 'btn-active' : ''}"
+        onclick={() => {
+          manual = 'cover'
+        }}>封面</button
+      >
+    {/if}
   </div>
   {#if mode === 'cover'}
     <CoverFlow />
