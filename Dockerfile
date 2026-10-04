@@ -2,6 +2,9 @@
 # Context: repo root. Build: docker build -t album .
 
 FROM node:24-bookworm-slim AS ui
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 WORKDIR /src/ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci
@@ -9,6 +12,9 @@ COPY ui/ ./
 RUN npm run build
 
 FROM rust:1.98-bookworm AS rust
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 WORKDIR /src
 # Layout must mirror the repo: album/ next to ui/ so #[folder = "../ui/dist"] resolves.
 COPY --from=ui /src/ui/dist /src/ui/dist
