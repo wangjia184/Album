@@ -170,6 +170,11 @@
   /** Transfer canvas control to the worker; keyed each remounts get a fresh transfer. */
   function attachCanvas(node: HTMLCanvasElement, key: number) {
     const g = workerGen
+    // Size the backing store ONCE before transfer — width/height must never
+    // be written again on the main thread after transferControlToOffscreen.
+    const px = Math.max(1, Math.round(S - 24))
+    node.width = px
+    node.height = px
     try {
       const off = node.transferControlToOffscreen()
       send(
@@ -177,8 +182,8 @@
           type: 'attach',
           key,
           canvas: off,
-          width: node.width,
-          height: node.height,
+          width: px,
+          height: px,
           gen: g,
         },
         [off],
@@ -311,8 +316,6 @@
               </div>
               <canvas
                 class="cf-canvas absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] rounded"
-                width={Math.max(1, Math.round(S - 24))}
-                height={Math.max(1, Math.round(S - 24))}
                 data-testid="cover-canvas"
                 data-canvas-k={k}
                 use:attachCanvas={k}
