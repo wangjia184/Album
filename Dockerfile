@@ -10,21 +10,23 @@ RUN npm run build
 
 FROM rust:1.98-bookworm AS rust
 WORKDIR /src
+# Layout must mirror the repo: album/ next to ui/ so #[folder = "../ui/dist"] resolves.
 COPY --from=ui /src/ui/dist /src/ui/dist
-COPY album/Cargo.toml album/Cargo.lock ./
+COPY album/Cargo.toml album/Cargo.lock album/
 # Warm dependency cache separately from sources.
 RUN mkdir -p album/src album/tests \
   && echo 'fn main() {}' > album/src/main.rs \
   && echo '' > album/src/lib.rs \
   && cargo build --release --manifest-path album/Cargo.toml || true
-COPY album/ ./
-RUN touch album/src/main.rs album/src/lib.rs && cargo build --release
+COPY album/ album/
+RUN touch album/src/main.rs album/src/lib.rs \
+  && cargo build --release --manifest-path album/Cargo.toml
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-COPY --from=rust /src/target/release/album /usr/local/bin/album
+COPY --from=rust /src/album/target/release/album /usr/local/bin/album
 EXPOSE 3000
 ENTRYPOINT ["/usr/local/bin/album"]
 CMD ["--addr", "0.0.0.0", "--port", "3000"]
