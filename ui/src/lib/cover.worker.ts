@@ -125,6 +125,8 @@ function setAllCanvasSize(w: number, h: number): void {
     canvas.width = w
     canvas.height = h
   }
+  // width/height assignment clears every buffer — force full redraw.
+  drawnPath.clear()
 }
 
 async function applyWindow(
@@ -228,10 +230,12 @@ ctx.onmessage = (ev: MessageEvent<MainToWorker>): void => {
     }
     case 'attach': {
       if (msg.gen !== gen) return
-      // Adopt the transferred backing store if main already sized it;
-      // otherwise force-sync every canvas to the shared buffer size.
+      // Size the incoming canvas only. NEVER rewrite peers' width/height
+      // here: assigning OffscreenCanvas.width clears the buffer, and
+      // drawnPath would still claim those keys are painted → gray slots.
       if (msg.canvas.width > 1 && msg.canvas.height > 1) {
-        setAllCanvasSize(msg.canvas.width, msg.canvas.height)
+        bufW = msg.canvas.width
+        bufH = msg.canvas.height
       } else {
         msg.canvas.width = bufW
         msg.canvas.height = bufH

@@ -1,4 +1,4 @@
-use axum::extract::Json;
+use axum::extract::{Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -7,12 +7,17 @@ use serde::Serialize;
 use serde_json::json;
 use utoipa::{OpenApi, ToSchema};
 
+use crate::AppState;
+
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Album API", version = "0.1.0"),
-    paths(health),
-    components(schemas(HealthStatus, ApiError)),
-    tags((name = "health", description = "Liveness probe"))
+    paths(health, site),
+    components(schemas(HealthStatus, SiteInfo, ApiError)),
+    tags(
+        (name = "health", description = "Liveness probe"),
+        (name = "site", description = "Navbar site branding")
+    )
 )]
 pub struct ApiDoc;
 
@@ -20,6 +25,15 @@ pub struct ApiDoc;
 pub struct HealthStatus {
     /// Service status; "ok" when healthy.
     pub status: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteInfo {
+    /// Navbar center title.
+    pub site_name: String,
+    /// Navbar right-side free-text note.
+    pub site_note: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -44,6 +58,23 @@ async fn health() -> Json<HealthStatus> {
     })
 }
 
+/// Site branding for the navbar.
+#[utoipa::path(
+    get,
+    path = "/api/site",
+    tag = "site",
+    responses(
+        (status = 200, description = "Site name and right-side note", body = SiteInfo),
+        (status = 404, description = "Not found", body = ApiError)
+    )
+)]
+async fn site(State(state): State<AppState>) -> Json<SiteInfo> {
+    Json(SiteInfo {
+        site_name: state.site_name.clone(),
+        site_note: state.site_note.clone(),
+    })
+}
+
 async fn api_not_found() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))
 }
@@ -51,6 +82,7 @@ async fn api_not_found() -> impl IntoResponse {
 pub fn router() -> Router<crate::AppState> {
     let api_routes = Router::new()
         .route("/health", get(health))
+        .route("/site", get(site))
         .merge(crate::fs_api::routes())
         .fallback(api_not_found);
 

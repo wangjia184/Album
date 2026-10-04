@@ -122,3 +122,12 @@ export function fileUrl(rel: string, name: string): string {
   ].map(encodeURIComponent)
   return `/api/fs/file/${parts.join('/')}`
 }
+
+export interface SiteInfo {
+  siteName: string
+  siteNote: string
+}
+
+export async function fetchSite(): Promise<SiteInfo> {
+  return (await fetchJson('/api/site')) as SiteInfo
+}

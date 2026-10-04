@@ -23,6 +23,10 @@ use crate::queue::ImageQueue;
 pub struct AppState {
     pub mounts: MountTable,
     pub queues: Arc<HashMap<PathBuf, Arc<ImageQueue>>>,
+    /// Navbar center title (empty = render nothing).
+    pub site_name: String,
+    /// Navbar right-side free-text note (empty = hide).
+    pub site_note: String,
 }
 
 impl AppState {
@@ -32,7 +36,7 @@ impl AppState {
     }
 
     /// State for a full server: spawns one playback queue per unique mount root.
-    pub fn new(mounts: MountTable) -> Self {
+    pub fn new(mounts: MountTable, site_name: String, site_note: String) -> Self {
         let mut queues: HashMap<PathBuf, Arc<ImageQueue>> = HashMap::new();
         for root in mounts.roots() {
             queues
@@ -42,6 +46,8 @@ impl AppState {
         Self {
             mounts,
             queues: Arc::new(queues),
+            site_name,
+            site_note,
         }
     }
 }

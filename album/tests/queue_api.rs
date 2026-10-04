@@ -21,7 +21,12 @@ fn app_seeded(paths: &[&str]) -> Router {
     ]);
     let queue = ImageQueue::from_paths(paths.iter().map(|s| s.to_string()).collect());
     let queues = Arc::new(HashMap::from([(root, queue)]));
-    build_app(AppState { mounts, queues })
+    build_app(AppState {
+        mounts,
+        queues,
+        site_name: String::new(),
+        site_note: String::new(),
+    })
 }
 
 async fn get(app: &Router, uri: &str) -> axum::response::Response {
@@ -195,7 +200,7 @@ async fn queue_spawns_at_startup() {
         ("localhost".to_string(), root.to_path_buf()),
         ("*".to_string(), root.to_path_buf()),
     ]);
-    let app = build_app(AppState::new(mounts));
+    let app = build_app(AppState::new(mounts, String::new(), String::new()));
 
     let mut found = false;
     let mut done = false;

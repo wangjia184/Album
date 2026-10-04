@@ -4,9 +4,8 @@ set -m # job control: each background job gets its own process group
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ ! -d "$ROOT/ui/dist" ]]; then
-  echo "warning: ui/dist missing — run (cd ui && npm run build) first if embed/tests need it" >&2
-fi
+echo "==> ui: npm run build"
+(cd "$ROOT/ui" && npm run build)
 
 if [[ ! -d "$ROOT/.www" ]]; then
   echo "warning: .www missing — album mount '*=$ROOT/.www' will list nothing" >&2
@@ -28,7 +27,9 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "==> album: cargo run (http://127.0.0.1:3000)"
-(cd "$ROOT/album" && cargo run -- --mount "*=$ROOT/.www") &
+(cd "$ROOT/album" && cargo run -- --mount "*=$ROOT/.www" \
+  --site-name "Album" \
+  --site-note "湘ICP备17022195号") &
 pids+=($!)
 
 echo "==> ui: npm run dev (http://127.0.0.1:5173, /api -> 3000)"

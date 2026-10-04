@@ -1,10 +1,28 @@
 <script lang="ts">
   import { router } from 'svelte-spa-router'
+  import { fetchSite } from '../lib/api'
 
   const route = $derived(router.location)
 
   const isHome = $derived(route === '/')
   const isAlbum = $derived(route === '/album' || (route ?? '').startsWith('/album/'))
+
+  let siteName = $state('')
+  let siteNote = $state('')
+
+  $effect(() => {
+    let cancelled = false
+    fetchSite()
+      .then((site) => {
+        if (cancelled) return
+        siteName = site.siteName
+        siteNote = site.siteNote
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  })
 </script>
 
 <div class="navbar sticky top-0 z-40 border-b border-base-300 bg-base-100/50 text-base-content backdrop-blur-md shadow-sm">
@@ -39,17 +57,14 @@
   </div>
 
   <div class="navbar-center">
-    <a class="text-xl font-bold" href="#/">Album</a>
+    {#if siteName}
+      <a class="text-xl font-bold" href="#/">{siteName}</a>
+    {/if}
   </div>
 
   <div class="navbar-end">
-    <a
-      href="https://beian.miit.gov.cn"
-      target="_blank"
-      rel="noreferrer"
-      class="px-2 text-xs opacity-80 hover:opacity-100"
-    >
-      备案编号：湘ICP备17022195号
-    </a>
+    {#if siteNote}
+      <span class="px-2 text-xs opacity-80">{siteNote}</span>
+    {/if}
   </div>
 </div>

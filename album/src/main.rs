@@ -19,6 +19,14 @@ struct Args {
     /// Host-to-path mount (repeatable, HOST=PATH; '*' is default).
     #[arg(long = "mount", value_name = "HOST=PATH", value_parser = parse_mount)]
     mount: Vec<(String, PathBuf)>,
+
+    /// Navbar center site title.
+    #[arg(long, env = "ALBUM_SITE_NAME", default_value = "")]
+    site_name: String,
+
+    /// Navbar right-side note (free text, e.g. filing number).
+    #[arg(long, env = "ALBUM_SITE_NOTE", default_value = "")]
+    site_note: String,
 }
 
 #[tokio::main]
@@ -39,12 +47,19 @@ async fn main() {
         }
     }
     let mounts: MountTable = args.mount.into_iter().collect();
+    if !args.site_name.is_empty() {
+        tracing::info!("site_name: {}", args.site_name);
+    }
+    if !args.site_note.is_empty() {
+        tracing::info!("site_note: {}", args.site_note);
+    }
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect("failed to bind listener");
     tracing::info!("listening on {addr}");
-    axum::serve(listener, album::build_app(album::AppState::new(mounts)))
+    let state = album::AppState::new(mounts, args.site_name, args.site_note);
+    axum::serve(listener, album::build_app(state))
         .await
         .expect("server error");
 }
@@ -63,6 +78,27 @@ mod tests {
             std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED)
         );
         assert!(args.mount.is_empty());
+    }
+
+    #[test]
+    fn parse_site_defaults_empty() {
+        let args = Args::try_parse_from(["album"]).unwrap();
+        assert_eq!(args.site_name, "");
+        assert_eq!(args.site_note, "");
+    }
+
+    #[test]
+    fn parse_site_name_and_note_flags() {
+        let args = Args::try_parse_from([
+            "album",
+            "--site-name",
+            "Album",
+            "--site-note",
+            "湘ICP备17022195号",
+        ])
+        .unwrap();
+        assert_eq!(args.site_name, "Album");
+        assert_eq!(args.site_note, "湘ICP备17022195号");
     }
 
     #[test]
