@@ -2,6 +2,14 @@
   import { onMount } from 'svelte'
   import { applyPreset, slotTransform } from '../lib/coverflow'
   import type { MainToWorker, WorkerToMain } from '../lib/coverProtocol'
+  import {
+    LIMIT,
+    MID,
+    SPARE,
+    canvasBufferPx,
+    expandKeyWindow,
+    settleKeyWindow,
+  } from '../lib/coverShared'
   import { splitMediaPath } from '../lib/pipeline'
   import { mediaHref, toSegments } from '../lib/path'
 
@@ -11,12 +19,9 @@
   // worker paints. Badges are ordinary DOM, filled from worker messages.
   //
   // ── Worker layer ──────────────────────────────────────────────────────
-  // cover.worker.ts owns queue API, image decode, canvas draw, parent dir.
+  // cover.worker.ts owns queue API, image decode, canvas draw.
   applyPreset('tightSeam')
 
-  const SPARE = 4
-  const LIMIT = 2 * SPARE + 1
-  const MID = SPARE
   const MOVE_MS = 950
   const PAUSE_MS = 4050
 
@@ -28,9 +33,11 @@
   let keyLo = $state(-SPARE)
   let keyHi = $state(SPARE)
   let windowBase = $state(0)
-  // key → path (badge + center open). Filled only from worker messages.
+  /** key → path (badge + center open). Filled only from worker messages. */
   let bindings = $state<Record<number, string | null>>({})
   let workerGen = 0
+  let rebaseSeq = 0
+  let lastPathSeq = -1
 
   const SLOT_MIN = 240
   const SLOT_MAX = 660
@@ -49,16 +56,16 @@
   }
 
   function expandKeysFor(from: number, to: number): void {
-    const lo = Math.min(from, to) - SPARE
-    const hi = Math.max(from, to) + SPARE
-    if (lo < keyLo) keyLo = lo
-    if (hi > keyHi) keyHi = hi
+    const w = expandKeyWindow(keyLo, keyHi, from, to)
+    keyLo = w.lo
+    keyHi = w.hi
   }
 
   function settleKeys(base: number): void {
-    windowBase = base
-    keyLo = base - SPARE
-    keyHi = base - SPARE + LIMIT - 1
+    const w = settleKeyWindow(base)
+    windowBase = w.base
+    keyLo = w.lo
+    keyHi = w.hi
     // Keep prior bindings for retained keys (no badge wipe); new keys stay
     // null until the worker's `paths` message.
     const next: Record<number, string | null> = {}
@@ -68,6 +75,7 @@
 
   let moveRaf: number | null = null
   let loopTimer: ReturnType<typeof setTimeout> | undefined
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined
   let animating = false
   let cancelled = false
   let worker: Worker | null = null
@@ -81,6 +89,7 @@
     const msg = ev.data
     switch (msg.type) {
       case 'status': {
+        if (msg.gen !== workerGen) return
         if (msg.status === 'ready') {
           status = 'ready'
           settleKeys(Math.round(p))
@@ -94,12 +103,10 @@
         break
       }
       case 'paths': {
-        if (msg.gen !== workerGen) return
-        // Merge worker paths — badges update without touching motion.
+        if (msg.gen !== workerGen || msg.seq < lastPathSeq) return
+        lastPathSeq = msg.seq
         const next: Record<number, string | null> = { ...bindings }
         for (const e of msg.entries) next[e.key] = e.path
-        // Drop keys outside the reported window that are no longer relevant
-        // only if they're outside current index set (avoid mid-motion wipe).
         bindings = next
         break
       }
@@ -127,10 +134,12 @@
       settleKeys(to)
       animating = false
       if (queueDelta !== undefined && !cancelled) {
+        rebaseSeq += 1
         send({
           type: 'rebase',
           displayBase: to,
           queueDelta,
+          seq: rebaseSeq,
           gen: workerGen,
         })
       }
@@ -167,27 +176,17 @@
     animateTo(k, k - windowBase)
   }
 
-  /** Transfer canvas control to the worker; keyed each remounts get a fresh transfer. */
+  /** Transfer canvas control to the worker; keyed remounts get a fresh transfer. */
   function attachCanvas(node: HTMLCanvasElement, key: number) {
     const g = workerGen
     // Size the backing store ONCE before transfer — width/height must never
     // be written again on the main thread after transferControlToOffscreen.
-    const px = Math.max(1, Math.round(S - 24))
+    const px = canvasBufferPx(S, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)
     node.width = px
     node.height = px
     try {
       const off = node.transferControlToOffscreen()
-      send(
-        {
-          type: 'attach',
-          key,
-          canvas: off,
-          width: px,
-          height: px,
-          gen: g,
-        },
-        [off],
-      )
+      send({ type: 'attach', key, canvas: off, gen: g }, [off])
     } catch (err: unknown) {
       console.warn('cover canvas attach failed', err)
     }
@@ -198,7 +197,6 @@
     }
   }
 
-  // Pin the CLIP box to the VISUAL viewport.
   function pinStage(): void {
     if (stageEl === null) return
     const clip = stageEl.parentElement
@@ -219,15 +217,20 @@
       : toSegments(splitMediaPath(path).dir)
   }
 
-  // Notify worker of backing-store size when S changes (rest only would be
-  // nicer; resize during motion only touches canvas buffers, not motion).
+  // Debounced backing-store resize — worker redraws from bitmap cache.
   let lastS = 0
   $effect(() => {
     const s = S
     if (s <= 0 || s === lastS) return
     lastS = s
     if (status !== 'ready') return
-    send({ type: 'resize', width: s, height: s, gen: workerGen })
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      if (cancelled) return
+      const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1
+      const px = canvasBufferPx(s, dpr)
+      send({ type: 'resize', width: px, height: px, dpr, gen: workerGen })
+    }, 150)
   })
 
   onMount(() => {
@@ -235,25 +238,36 @@
     const onResize = (): void => pinStage()
     window.addEventListener('resize', onResize)
 
-    worker = new Worker(new URL('../lib/cover.worker.ts', import.meta.url), {
-      type: 'module',
-    })
+    try {
+      worker = new Worker(new URL('../lib/cover.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+    } catch (err: unknown) {
+      console.error('cover worker construct failed', err)
+      status = 'error'
+      error = '当前环境无法启动封面渲染'
+      return () => {
+        window.removeEventListener('resize', onResize)
+      }
+    }
+
     worker.onmessage = onWorkerMessage
     worker.onerror = (err) => {
       console.error('cover worker error', err)
-      if (status === 'loading') {
+      if (status === 'loading' || status === 'ready') {
         status = 'error'
-        error = 'worker 启动失败'
+        error = '封面渲染进程异常'
       }
     }
     const offset0 = Math.floor(Math.random() * 1_000_000)
     workerGen = 1
-    send({ type: 'init', offset0, limit: LIMIT, mid: MID, gen: workerGen })
+    send({ type: 'init', offset0, gen: workerGen })
 
     return () => {
       cancelled = true
       window.removeEventListener('resize', onResize)
       clearTimeout(loopTimer)
+      clearTimeout(resizeTimer)
       if (moveRaf !== null) cancelAnimationFrame(moveRaf)
       send({ type: 'dispose' })
       worker?.terminate()
@@ -308,12 +322,11 @@
               class="relative h-full w-full overflow-hidden rounded-lg bg-white p-3 ring-1 ring-base-300 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
               data-testid="cover-ph"
             >
+              <!-- white board under canvas; index kept for tests only -->
               <div
-                class="absolute inset-3 flex items-center justify-center rounded bg-base-200/40 text-sm text-base-content/40"
+                class="absolute inset-3 rounded bg-base-200/40"
                 data-k-label={k}
-              >
-                {k}
-              </div>
+              ></div>
               <canvas
                 class="cf-canvas absolute inset-3 h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] rounded"
                 data-testid="cover-canvas"

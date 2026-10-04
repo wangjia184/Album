@@ -19,11 +19,9 @@
     typeof HTMLCanvasElement !== 'undefined' &&
     typeof HTMLCanvasElement.prototype.transferControlToOffscreen === 'function'
 
-  const mode = $derived.by(() => {
-    if (manual === 'strip') return 'strip'
-    if (manual === 'cover') return canCover ? 'cover' : 'strip'
-    return canCover ? 'cover' : 'strip'
-  })
+  const mode = $derived(
+    manual === 'strip' || !canCover ? 'strip' : 'cover',
+  )
 
   function open(path: string): void {
     const { dir, file } = splitMediaPath(path)

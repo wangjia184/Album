@@ -194,23 +194,5 @@ main:has([aria-modal='true']) {
   /* NO will-change: promoting preserve-3d children to their own composited
      layers breaks the shared 3D context — shows background holes mid-motion. */
   pointer-events: auto;
-}
-.cf-slot {
   overflow: visible;
-}
-/* Registration point: 10px dot pinned to a plane coordinate
-   (center / left-edge mid / right-edge mid) via translate(-50%,-50%). */
-
-/* Coverflow photos: fade in once decoded (load event adds .is-loaded). */
-.cf-photo {
-  opacity: 0;
-  transition: opacity 500ms ease;
-}
-.cf-photo.is-loaded {
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cf-photo {
-    transition-duration: 1ms;
-  }
 }
