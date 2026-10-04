@@ -7,9 +7,9 @@
   import { mediaHref } from '../lib/path'
 
   let current = $state<string | null>(null)
-  // Default = orientation read ONCE at load (no resize re-check); the floating
-  // toggle pins a manual choice until reload. Cover also requires a
-  // Web Worker + OffscreenCanvas environment (worker-backed canvas paint).
+  // Default = cover when the env can run the worker canvas path; otherwise
+  // strip. The floating toggle pins a manual choice until reload. No
+  // orientation / resolution detection.
   let manual: 'cover' | 'strip' | null = $state(null)
 
   const canCover =
@@ -19,16 +19,10 @@
     typeof HTMLCanvasElement !== 'undefined' &&
     typeof HTMLCanvasElement.prototype.transferControlToOffscreen === 'function'
 
-  // Synchronous initial value: a false→true flip in onMount would flash strip
-  // mode (and fire its queue fetch) before switching to cover on load.
-  let landscape = $state(
-    typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches,
-  )
-
   const mode = $derived.by(() => {
     if (manual === 'strip') return 'strip'
     if (manual === 'cover') return canCover ? 'cover' : 'strip'
-    return landscape && canCover ? 'cover' : 'strip'
+    return canCover ? 'cover' : 'strip'
   })
 
   function open(path: string): void {
