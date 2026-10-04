@@ -1,0 +1,19 @@
+node_modules/
+ui/dist/
+album/target/
+.DS_Store
+*.log
+.env
+.superpowers/
+
+# excluded sensitive / local-only paths
+配置/
+.opencode/
+.claude/
+docs/
+scripts/
+.mcp.json
+CLAUDE.md
+opencode.json
+.www/
+.roottest
