@@ -19,7 +19,9 @@
   )
 
   function reveal(event: Event): void {
-    ;(event.currentTarget as HTMLImageElement).style.opacity = '1'
+    const img = event.currentTarget as HTMLImageElement
+    img.classList.remove('opacity-0')
+    img.classList.add('opacity-50')
   }
 
   $effect(() => {
@@ -39,7 +41,7 @@
 
 <a
   href={childHref(parentPath, name)}
-  class="group relative block h-full w-full overflow-hidden rounded-lg border border-base-300 bg-base-200 opacity-75 transition hover:bg-base-300 hover:opacity-100"
+  class="group relative block h-full w-full overflow-hidden rounded-lg border border-base-300 bg-base-200 transition hover:bg-base-300"
   style:aspect-ratio="4 / 3"
 >
   {#if thumbs.length === 1}
@@ -49,7 +51,7 @@
       aria-hidden="true"
       loading="lazy"
       decoding="async"
-      class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500"
+      class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
       onload={reveal}
     />
   {:else if hasThumbs}
@@ -61,7 +63,7 @@
           aria-hidden="true"
           loading="lazy"
           decoding="async"
-          class="h-full w-full object-cover opacity-0 transition-opacity duration-500"
+          class="h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
           onload={reveal}
         />
       {/each}
