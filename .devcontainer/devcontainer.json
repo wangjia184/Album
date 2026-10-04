@@ -1,0 +1,39 @@
+{
+  "name": "machine-dev",
+  "image": "machine-dev:local",
+  "runArgs": [
+    "--network=host",
+    "--add-host=host.docker.internal:host-gateway"
+  ],
+  "overrideCommand": false,
+  "containerEnv": {
+    "SSH_PORT": "2222"
+  },
+  "workspaceFolder": "/workspace/",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/,type=bind,consistency=cached",
+  "remoteUser": "linuxbrew",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:HOME}/.ssh/id_ed25519.pub,target=/root/authorized_keys,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.devcontainer/entrypoint.sh,target=/entrypoint.sh,type=bind,readonly"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "remoteEnv": {
+    "HTTP_PROXY": "http://host.docker.internal:1080",
+    "HTTPS_PROXY": "http://host.docker.internal:1080",
+    "NO_PROXY": "localhost,127.0.0.1,::1,192.168.0.0/16,172.16.0.0/12,100.64.0.0/10"
+  },
+  "postCreateCommand": "rustc --version && cargo --version && node --version && npm --version && opencode --version && git config --global --add safe.directory '/workspace/'"
+}

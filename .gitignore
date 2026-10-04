@@ -5,3 +5,15 @@ album/target/
 *.log
 .env
 .superpowers/
+
+# excluded (sensitive / local-only)
+配置/
+.opencode/
+.claude/
+docs/
+scripts/
+.mcp.json
+CLAUDE.md
+opencode.json
+.www/
+.roottest
