@@ -111,8 +111,9 @@ impl ImageQueue {
 }
 
 /// Iterative walk of `root`; sends `/`-joined image rel paths on `tx`.
-/// Symlinked entries (dirs and files) are skipped, unreadable dirs are
-/// skipped; `tx` is dropped when the walk finishes.
+/// Symlinked entries (dirs and files) and `@`/`.` names (Synology `@eaDir`,
+/// dotfiles) are skipped, unreadable dirs are skipped; `tx` is dropped when
+/// the walk finishes.
 fn scan(root: &Path, tx: &Sender<String>) {
     let mut stack = vec![(root.to_path_buf(), String::new())];
     while let Some((dir, prefix)) = stack.pop() {
@@ -125,6 +126,9 @@ fn scan(root: &Path, tx: &Sender<String>) {
         };
         for entry in rd.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
+            if crate::fs::is_ignored_name(&name) {
+                continue;
+            }
             let ft = match entry.file_type() {
                 Ok(ft) => ft,
                 Err(_) => continue,

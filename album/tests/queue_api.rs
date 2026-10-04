@@ -219,3 +219,33 @@ async fn queue_spawns_at_startup() {
     assert!(found, "startup scan never surfaced nested/found.jpg");
     assert!(done, "queue never reached done");
 }
+
+#[tokio::test]
+async fn queue_scan_skips_at_and_dot_entries() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join("@eaDir")).expect("@eaDir");
+    std::fs::write(root.join("@eaDir").join("thumb.jpg"), b"t").expect("thumb.jpg");
+    std::fs::write(root.join(".hidden.jpg"), b"h").expect(".hidden.jpg");
+    std::fs::write(root.join("keep.jpg"), b"k").expect("keep.jpg");
+
+    let mounts = MountTable::from_iter([("*".to_string(), root.to_path_buf())]);
+    let app = build_app(AppState::new(mounts, String::new(), String::new()));
+
+    let mut done = false;
+    let mut items: Vec<(u64, String)> = Vec::new();
+    for _ in 0..100 {
+        let json = body_json(get(&app, "/api/fs/queue?offset=0&limit=64").await).await;
+        done = json["done"].as_bool().unwrap_or(false);
+        if done {
+            items = images_of(&json);
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(done, "queue never reached done");
+    let mut paths: Vec<String> = items.iter().map(|(_, p)| p.clone()).collect();
+    paths.sort();
+    paths.dedup();
+    assert_eq!(paths, vec!["keep.jpg".to_string()], "scan must skip @/. entries");
+}

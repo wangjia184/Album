@@ -53,6 +53,12 @@ pub(crate) fn is_image_path(name: &str) -> bool {
     kind_from_name(name) == ChildKind::Image
 }
 
+/// True for entries the browser must never surface: Synology metadata dirs
+/// (`@eaDir`, `@recycle`, …) and dotfiles (`.DS_Store`, …).
+pub(crate) fn is_ignored_name(name: &str) -> bool {
+    name.starts_with('@') || name.starts_with('.')
+}
+
 impl AlbumFs {
     /// Canonicalize `root` at construction; fail if not a directory.
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
@@ -117,6 +123,9 @@ impl AlbumFs {
             let entry = entry?;
             let is_dir = entry.file_type()?.is_dir();
             let name = entry.file_name().to_string_lossy().into_owned();
+            if is_ignored_name(&name) {
+                continue;
+            }
             let kind = if is_dir {
                 ChildKind::Dir
             } else {
@@ -161,6 +170,9 @@ impl AlbumFs {
                 continue;
             }
             let name = entry.file_name().to_string_lossy().into_owned();
+            if is_ignored_name(&name) {
+                continue;
+            }
             if kind_from_name(&name) == ChildKind::Image {
                 images.push(format!("{prefix}{name}"));
             }
@@ -187,6 +199,9 @@ impl AlbumFs {
                 continue;
             }
             let name = entry.file_name().to_string_lossy().into_owned();
+            if is_ignored_name(&name) {
+                continue;
+            }
             let sub_prefix = format!("{prefix}{name}/");
             if let Ok(found) = Self::direct_images(&entry.path(), &sub_prefix) {
                 images.extend(found);
@@ -233,7 +248,45 @@ mod tests {
         fs::write(root.join("a_file.jpg"), b"jpg").expect("a_file.jpg");
         fs::write(root.join("m_clip.mp4"), b"mp4").expect("m_clip.mp4");
         fs::write(root.join("other.bin"), b"bin").expect("other.bin");
+        // Synology PhotoStation metadata dir + macOS junk: must never be listed.
+        fs::create_dir(root.join("@eaDir")).expect("@eaDir");
+        fs::write(root.join("@eaDir").join("z_file.txt"), "thumb").expect("@eaDir thumb");
+        fs::write(root.join("@eaDir").join("a_file.jpg"), "thumb").expect("@eaDir thumb jpg");
+        fs::write(root.join(".DS_Store"), b"ds").expect(".DS_Store");
         tmp
+    }
+
+    #[test]
+    fn list_skips_at_and_dot_entries() {
+        let tmp = fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        let children = album.list_children("").expect("list root");
+        for c in &children {
+            assert!(
+                !c.name.starts_with('@') && !c.name.starts_with('.'),
+                "unexpected hidden/synology entry {:?}",
+                c.name
+            );
+        }
+        let names: Vec<&str> = children.iter().map(|c| c.name.as_str()).collect();
+        assert!(!names.contains(&"@eaDir"));
+        assert!(!names.contains(&".DS_Store"));
+    }
+
+    #[test]
+    fn random_images_skips_at_and_dot_entries() {
+        let tmp = fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        // a_dir only contains nested.txt → falls back to nesting; @eaDir's
+        // a_file.jpg must never be picked, and .DS_Store isn't an image anyway.
+        let picked = album.random_images("", 100).expect("random_images");
+        for p in &picked {
+            assert!(
+                !p.contains("@eaDir") && !p.starts_with('.'),
+                "unexpected pick {p}"
+            );
+        }
+        assert!(picked.contains(&"a_file.jpg".to_string()), "real image expected");
     }
 
     #[test]
