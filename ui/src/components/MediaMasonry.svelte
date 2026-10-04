@@ -56,7 +56,7 @@
       >
         <MediaTile
           {item}
-          url={fileUrl(rel, item.name)}
+          url={fileUrl(rel, item.name, item.kind === 'image')}
           onselect={() => onselect(index)}
           onload={(w, h) => handleLoad(item.name, w, h)}
         />

@@ -38,7 +38,7 @@
       }
       im.onload = settle
       im.onerror = settle
-      im.src = fileUrl('', item.path)
+      im.src = fileUrl('', item.path, true)
     }
   }
 
@@ -218,7 +218,7 @@
         aria-label={item.path}
         onclick={() => select(i)}
       >
-        <img src={fileUrl('', item.path)} alt="" class="h-full w-full object-cover" />
+        <img src={fileUrl('', item.path, true)} alt="" class="h-full w-full object-cover" />
       </button>
     {/each}
   {/if}

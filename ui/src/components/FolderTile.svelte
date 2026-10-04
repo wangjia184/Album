@@ -44,7 +44,7 @@
 >
   {#if thumbs.length === 1}
     <img
-      src={fileUrl(folderRel, thumbs[0])}
+      src={fileUrl(folderRel, thumbs[0], true)}
       alt=""
       aria-hidden="true"
       loading="lazy"
@@ -56,7 +56,7 @@
     <div class="absolute inset-0 {gridClass}">
       {#each thumbs.slice(0, 4) as image (image)}
         <img
-          src={fileUrl(folderRel, image)}
+          src={fileUrl(folderRel, image, true)}
           alt=""
           aria-hidden="true"
           loading="lazy"

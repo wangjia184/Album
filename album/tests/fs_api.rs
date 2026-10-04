@@ -436,3 +436,48 @@ async fn thumbs_recurses_when_no_direct_images() {
     assert_eq!(images.len(), 1);
     assert_eq!(images[0], "sub/nested.jpg");
 }
+
+async fn body_text(response: axum::response::Response) -> String {
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Seed `@eaDir` thumbnails for `a_file.jpg` (dir-style) and `m_clip.mp4`
+/// (none) onto the shared fixture, then exercise ?thumb=.
+#[tokio::test]
+async fn file_thumb_param_serves_eaDir_thumbnail() {
+    let tmp = fixture();
+    std::fs::create_dir_all(tmp.path().join("@eaDir/a_file.jpg")).expect("eaDir thumb dir");
+    std::fs::write(
+        tmp.path()
+            .join("@eaDir/a_file.jpg/SYNOPHOTO_THUMB_M.jpg"),
+        "thumb-m",
+    )
+    .expect("thumb m");
+    std::fs::write(
+        tmp.path()
+            .join("@eaDir/a_file.jpg/SYNOPHOTO_THUMB_XL.jpg"),
+        "thumb-xl",
+    )
+    .expect("thumb xl");
+    let app = app_with(&tmp);
+
+    let response = get(&app, "/api/fs/file/a_file.jpg?thumb=1").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let ct = response.headers().get(header::CONTENT_TYPE).unwrap().to_str().unwrap().to_string();
+    assert!(ct.contains("image/jpeg"), "expected jpeg, got {ct}");
+    assert_eq!(body_text(response).await, "thumb-xl");
+
+    // default (no param) → original
+    let response = get(&app, "/api/fs/file/a_file.jpg").await;
+    assert_eq!(body_text(response).await, "jpg");
+}
+
+#[tokio::test]
+async fn file_thumb_falls_back_to_original_when_no_eaDir() {
+    let tmp = fixture();
+    let app = app_with(&tmp);
+    let response = get(&app, "/api/fs/file/a_file.jpg?thumb=1").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body_text(response).await, "jpg");
+}

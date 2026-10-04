@@ -115,12 +115,13 @@ export async function fetchQueue(
   return { images, done, total }
 }
 
-export function fileUrl(rel: string, name: string): string {
+export function fileUrl(rel: string, name: string, thumb = false): string {
   const parts = [
     ...rel.split('/').filter((segment) => segment.length > 0),
     ...name.split('/').filter((segment) => segment.length > 0),
   ].map(encodeURIComponent)
-  return `/api/fs/file/${parts.join('/')}`
+  const query = thumb ? '?thumb=1' : ''
+  return `/api/fs/file/${parts.join('/')}${query}`
 }
 
 export interface SiteInfo {

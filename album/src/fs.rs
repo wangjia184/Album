@@ -30,6 +30,9 @@ pub struct ListedChild {
 const IMAGE_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"];
 const VIDEO_EXTS: [&str; 6] = ["mp4", "mov", "mkv", "webm", "avi", "m4v"];
 
+/// Synology `@eaDir` thumbnail files, largest → smallest.
+const THUMB_SIZES: [&str; 7] = ["XL", "L", "M", "SM", "B", "S", "PREVIEW"];
+
 fn not_found(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::NotFound, msg)
 }
@@ -229,6 +232,37 @@ impl AlbumFs {
             return Err(not_found("not a file"));
         }
         Ok(path)
+    }
+
+    /// True when `rel` resolves to a regular file under the mount root.
+    fn is_file_at(&self, rel: &str) -> bool {
+        self.resolve(rel).is_ok_and(|p| p.is_file())
+    }
+
+    /// Synology thumbnail for `rel`: `<parent>/@eaDir/<name>` where the
+    /// entry is either a directory of `SYNOPHOTO_THUMB_{size}.jpg` files
+    /// (tried XL→…→PREVIEW) or a single flat file; falls back to `rel`
+    /// itself when no thumbnail exists.
+    pub fn thumbnail_rel(&self, rel: &str) -> String {
+        let (parent, name) = match rel.rsplit_once('/') {
+            Some((p, n)) => (p, n),
+            None => ("", rel),
+        };
+        let ea = if parent.is_empty() {
+            format!("@eaDir/{name}")
+        } else {
+            format!("{parent}/@eaDir/{name}")
+        };
+        for size in THUMB_SIZES {
+            let cand = format!("{ea}/SYNOPHOTO_THUMB_{size}.jpg");
+            if self.is_file_at(&cand) {
+                return cand;
+            }
+        }
+        if self.is_file_at(&ea) {
+            return ea;
+        }
+        rel.to_string()
     }
 }
 
@@ -508,5 +542,84 @@ mod tests {
 
         let picked = album.random_images("album", 10).expect("random_images");
         assert_eq!(picked, vec!["direct.jpg".to_string()]);
+    }
+
+    /// Fixture for thumbnail resolution: dir-style (SYNOPHOTO_THUMB_*),
+    /// flat-style (`@eaDir/<name>` file), mixed-case name, and no-thumb file.
+    fn thumb_fixture() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let pics = tmp.path().join("pics");
+        fs::create_dir_all(pics.join("@eaDir/dirstyle.jpg")).expect("dirstyle eaDir");
+        fs::write(pics.join("dirstyle.jpg"), b"original").expect("dirstyle orig");
+        fs::write(
+            pics.join("@eaDir/dirstyle.jpg").join("SYNOPHOTO_THUMB_M.jpg"),
+            b"thumb-m",
+        )
+        .expect("thumb m");
+        fs::write(
+            pics.join("@eaDir/dirstyle.jpg").join("SYNOPHOTO_THUMB_XL.jpg"),
+            b"thumb-xl",
+        )
+        .expect("thumb xl");
+        fs::create_dir_all(pics.join("@eaDir")).expect("eaDir dir");
+        fs::write(pics.join("@eaDir/flat.jpg"), b"thumb-flat").expect("flat thumb");
+        fs::write(pics.join("flat.jpg"), b"original").expect("flat orig");
+        fs::create_dir_all(pics.join("@eaDir/UPPER.JPG")).expect("upper eaDir");
+        fs::write(
+            pics.join("@eaDir/UPPER.JPG").join("SYNOPHOTO_THUMB_L.jpg"),
+            b"thumb-l",
+        )
+        .expect("thumb l");
+        fs::write(pics.join("UPPER.JPG"), b"original").expect("upper orig");
+        fs::write(pics.join("nothumb.jpg"), b"original").expect("nothumb orig");
+        fs::write(pics.join("nothumb.jpg@SynoEAStream"), b"").expect("stream sidecar");
+        tmp
+    }
+
+    #[test]
+    fn thumbnail_rel_prefers_dir_style_xl_then_size_order() {
+        let tmp = thumb_fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        assert_eq!(
+            album.thumbnail_rel("pics/dirstyle.jpg"),
+            "pics/@eaDir/dirstyle.jpg/SYNOPHOTO_THUMB_XL.jpg"
+        );
+    }
+
+    #[test]
+    fn thumbnail_rel_uses_flat_eaDir_file() {
+        let tmp = thumb_fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        assert_eq!(album.thumbnail_rel("pics/flat.jpg"), "pics/@eaDir/flat.jpg");
+    }
+
+    #[test]
+    fn thumbnail_rel_keeps_exact_case() {
+        let tmp = thumb_fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        assert_eq!(
+            album.thumbnail_rel("pics/UPPER.JPG"),
+            "pics/@eaDir/UPPER.JPG/SYNOPHOTO_THUMB_L.jpg"
+        );
+    }
+
+    #[test]
+    fn thumbnail_rel_falls_back_to_original_when_missing() {
+        let tmp = thumb_fixture();
+        let album = AlbumFs::new(tmp.path()).expect("new");
+        assert_eq!(album.thumbnail_rel("pics/nothumb.jpg"), "pics/nothumb.jpg");
+        // Video-ish / any path without thumbnails anywhere: unchanged.
+        assert_eq!(album.thumbnail_rel("pics/nothumb.jpg"), "pics/nothumb.jpg");
+    }
+
+    #[test]
+    fn thumbnail_rel_root_level_no_parent() {
+        let tmp = thumb_fixture();
+        let root = tmp.path();
+        fs::create_dir(root.join("@eaDir")).expect("@eaDir root");
+        fs::write(root.join("@eaDir/top.jpg"), b"thumb").expect("top thumb");
+        fs::write(root.join("top.jpg"), b"original").expect("top orig");
+        let album = AlbumFs::new(root).expect("new");
+        assert_eq!(album.thumbnail_rel("top.jpg"), "@eaDir/top.jpg");
     }
 }

@@ -8,7 +8,7 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::{json, Value};
 use tokio_util::io::ReaderStream;
 
@@ -163,23 +163,42 @@ async fn list_path(
     list_impl(state, headers, path).await
 }
 
+/// Bool query flag accepting `1`/`true` (case-insensitive); anything else → false.
+fn deserialize_loose_bool<'de, D>(d: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(d)?;
+    Ok(raw.map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True")))
+}
+
+#[derive(Deserialize)]
+struct FileParams {
+    #[serde(default, deserialize_with = "deserialize_loose_bool")]
+    thumb: Option<bool>,
+}
+
 async fn file(
     State(state): State<AppState>,
     Path(path): Path<String>,
+    Query(params): Query<FileParams>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let root = resolve_root(&state, &headers)?;
-    let content_type = HeaderValue::from_str(
-        mime_guess::from_path(&path)
-            .first_or_octet_stream()
-            .as_ref(),
-    )
-    .map_err(|_| internal())?;
+    let want_thumb = params.thumb.unwrap_or(false);
 
-    let (std_file, mtime_ns, size) =
-        tokio::task::spawn_blocking(move || -> io::Result<(std::fs::File, u128, u64)> {
+    let (std_file, mtime_ns, size, content_type) =
+        tokio::task::spawn_blocking(move || -> io::Result<(std::fs::File, u128, u64, String)> {
             let album = AlbumFs::new(&root)?;
-            let file = album.open_file(&path)?;
+            let rel = if want_thumb {
+                album.thumbnail_rel(&path)
+            } else {
+                path.clone()
+            };
+            let content_type = mime_guess::from_path(&rel)
+                .first_or_octet_stream()
+                .to_string();
+            let file = album.open_file(&rel)?;
             let meta = file.metadata()?;
             let mtime_ns = meta
                 .modified()
@@ -187,7 +206,7 @@ async fn file(
                 .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_nanos())
                 .unwrap_or(0);
-            Ok((file, mtime_ns, meta.len()))
+            Ok((file, mtime_ns, meta.len(), content_type))
         })
         .await
         .map_err(|_| internal())?
@@ -205,6 +224,7 @@ async fn file(
             .map_err(|_| internal());
     }
 
+    let content_type = HeaderValue::from_str(&content_type).map_err(|_| internal())?;
     let tokio_file = tokio::fs::File::from_std(std_file);
     Response::builder()
         .status(StatusCode::OK)

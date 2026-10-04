@@ -78,8 +78,8 @@ Base: `/api`. Swagger UI: `http://127.0.0.1:3000/swagger-ui/` (spec: `/api-doc/o
 |---|---|
 | `GET /api/health` | Liveness → `{"status":"ok"}` |
 | `GET /api/site` | Navbar branding → `{"siteName","siteNote"}` |
-| `GET /api/fs/list[/{*path}]` | Directory listing → `{path, rootName, children:[{name,kind}]}` (dirs first) |
-| `GET /api/fs/file/{*path}` | Raw file bytes (`ETag` / `If-None-Match` → 304) |
+| `GET /api/fs/list[/{*path}]` | Directory listing → `{path, rootName, children:[{name,kind}]}` (dirs first; `@`/`.` entries hidden) |
+| `GET /api/fs/file/{*path}[?thumb=1]` | Raw file bytes (`ETag` / `If-None-Match` → 304). `thumb=1` serves the Synology `@eaDir` thumbnail when present, else the original |
 | `GET /api/fs/meta/{*path}` | Media metadata (size, dimensions, EXIF, …) |
 | `GET /api/fs/thumbs/{*path}?n=` | Up to `n` image URLs for a folder (default 3, max 8) |
 | `GET /api/fs/queue?offset&limit&center` | Playback window for cover-flow / strip rotation |
